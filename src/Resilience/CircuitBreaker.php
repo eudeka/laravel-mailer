@@ -37,7 +37,7 @@ final readonly class CircuitBreaker
         }
 
         $duration = $cooldownSeconds ?? $this->defaultCooldownSeconds;
-        $expiryTimestamp = time() + $duration;
+        $expiryTimestamp = (int) now()->getTimestamp() + $duration;
 
         $this->cache->put(
             $this->cacheKey($provider),
@@ -73,7 +73,7 @@ final readonly class CircuitBreaker
             return 0;
         }
 
-        $remaining = $expiry - time();
+        $remaining = $expiry - (int) now()->getTimestamp();
 
         return max(0, $remaining);
     }

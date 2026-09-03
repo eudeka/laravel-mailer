@@ -13,6 +13,8 @@ final readonly class NormalizedEmailPayload
      * @param  array<Address>  $replyTo
      * @param  array<EmailAttachment>  $attachments
      * @param  array<string, string>  $headers
+     * @param  array<string>  $tags
+     * @param  array<string, string>  $metadata
      */
     public function __construct(
         public Address $from,
@@ -25,5 +27,7 @@ final readonly class NormalizedEmailPayload
         public array $replyTo = [],
         public array $attachments = [],
         public array $headers = [],
+        public array $tags = [],
+        public array $metadata = [],
     ) {}
 }

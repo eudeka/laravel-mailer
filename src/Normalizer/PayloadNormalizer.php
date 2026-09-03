@@ -31,7 +31,7 @@ final readonly class PayloadNormalizer
         $html = $email->getHtmlBody();
 
         $attachments = $this->extractAttachments($email);
-        $headers = $this->extractCustomHeaders($email);
+        $headerData = $this->extractHeadersTagsAndMetadata($email);
 
         return new NormalizedEmailPayload(
             from: $from,
@@ -43,7 +43,9 @@ final readonly class PayloadNormalizer
             bcc: $bcc,
             replyTo: $replyTo,
             attachments: $attachments,
-            headers: $headers,
+            headers: $headerData['headers'],
+            tags: $headerData['tags'],
+            metadata: $headerData['metadata'],
         );
     }
 
@@ -96,11 +98,11 @@ final readonly class PayloadNormalizer
     }
 
     /**
-     * Extract custom headers from the email, skipping standard envelope/mime headers.
+     * Extract custom headers, tags, and metadata from the email.
      *
-     * @return array<string, string>
+     * @return array{headers: array<string, string>, tags: array<string>, metadata: array<string, string>}
      */
-    private function extractCustomHeaders(Email $email): array
+    private function extractHeadersTagsAndMetadata(Email $email): array
     {
         $excluded = [
             'from', 'to', 'cc', 'bcc', 'reply-to', 'subject', 'date',
@@ -108,16 +110,92 @@ final readonly class PayloadNormalizer
         ];
 
         $headers = [];
+        $tags = [];
+        $metadata = [];
 
         /** @var HeaderInterface $header */
         foreach ($email->getHeaders()->all() as $header) {
             $name = strtolower($header->getName());
 
-            if (! in_array($name, $excluded, true)) {
-                $headers[$header->getName()] = $header->getBodyAsString();
+            if (in_array($name, $excluded, true)) {
+                continue;
             }
+
+            // Check if header is a TagHeader class
+            if (str_ends_with(get_class($header), 'TagHeader')) {
+                $rawVal = method_exists($header, 'getValue') ? $header->getValue() : null;
+                $val = is_scalar($rawVal) ? (string) $rawVal : $header->getBodyAsString();
+                foreach (array_map('trim', explode(',', $val)) as $tag) {
+                    if ($tag !== '' && ! in_array($tag, $tags, true)) {
+                        $tags[] = $tag;
+                    }
+                }
+
+                continue;
+            }
+
+            // Check if header is a MetadataHeader class
+            if (str_ends_with(get_class($header), 'MetadataHeader')) {
+                $rawKey = method_exists($header, 'getKey') ? $header->getKey() : null;
+                $rawVal = method_exists($header, 'getValue') ? $header->getValue() : null;
+
+                if (is_scalar($rawKey) && is_scalar($rawVal)) {
+                    $metadata[(string) $rawKey] = (string) $rawVal;
+                } else {
+                    $val = $header->getBodyAsString();
+                    $parts = explode('=', $val, 2);
+
+                    if (count($parts) === 2) {
+                        $metadata[trim($parts[0])] = trim($parts[1]);
+                    }
+                }
+
+                continue;
+            }
+
+            // Check for Tag headers by convention (x-tag, x-tags, tag, tags)
+            if (in_array($name, ['x-tag', 'x-tags', 'tag', 'tags'], true)) {
+                $val = $header->getBodyAsString();
+                foreach (array_map('trim', explode(',', $val)) as $tag) {
+                    if ($tag !== '' && ! in_array($tag, $tags, true)) {
+                        $tags[] = $tag;
+                    }
+                }
+
+                continue;
+            }
+
+            // Check for individual metadata header: X-Metadata-{Key}: Value
+            if (str_starts_with($name, 'x-metadata-')) {
+                $metaKey = substr($header->getName(), strlen('x-metadata-'));
+                $metadata[$metaKey] = $header->getBodyAsString();
+
+                continue;
+            }
+
+            // Check for serialized JSON metadata header: X-Metadata: {"key":"val"}
+            if ($name === 'x-metadata' || $name === 'metadata') {
+                $val = $header->getBodyAsString();
+                $decoded = json_decode($val, true);
+
+                if (is_array($decoded)) {
+                    foreach ($decoded as $k => $v) {
+                        if (is_scalar($v)) {
+                            $metadata[(string) $k] = (string) $v;
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            $headers[$header->getName()] = $header->getBodyAsString();
         }
 
-        return $headers;
+        return [
+            'headers' => $headers,
+            'tags' => $tags,
+            'metadata' => $metadata,
+        ];
     }
 }

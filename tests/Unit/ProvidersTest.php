@@ -38,6 +38,8 @@ function createTestPayload(): NormalizedEmailPayload
             ),
         ],
         headers: ['X-Track' => '12345'],
+        tags: ['welcome'],
+        metadata: ['tenant' => 'acme_corp'],
     );
 }
 
@@ -65,7 +67,11 @@ it('formats and sends payload via Resend API', function () {
             && $data['to'] === ['John Doe <recipient@example.com>']
             && $data['subject'] === 'Hello World'
             && $data['html'] === '<h1>Hello</h1>'
-            && count($data['attachments']) === 2;
+            && count($data['attachments']) === 2
+            && $data['attachments'][1]['content_id'] === 'logo_cid'
+            && $data['attachments'][1]['content_type'] === 'image/png'
+            && $data['tags'][0] === ['name' => 'tag', 'value' => 'welcome']
+            && $data['tags'][1] === ['name' => 'tenant', 'value' => 'acme_corp'];
     });
 });
 
@@ -94,7 +100,10 @@ it('formats and sends payload via Brevo API', function () {
             && $data['to'][0]['email'] === 'recipient@example.com'
             && $data['to'][0]['name'] === 'John Doe'
             && $data['htmlContent'] === '<h1>Hello</h1>'
-            && count($data['attachment']) === 2;
+            && count($data['attachment']) === 2
+            && $data['attachment'][1]['name'] === 'logo_cid'
+            && $data['tags'] === ['welcome']
+            && $data['headers']['X-Metadata-tenant'] === 'acme_corp';
     });
 });
 
@@ -122,13 +131,17 @@ it('formats and sends payload via SMTP2GO API', function () {
     Http::assertSent(function (Request $request) {
         $data = $request->data();
 
+        $customHeaders = collect($data['custom_headers']);
+
         return $request->url() === 'https://api.smtp2go.com/v3/email/send'
             && $data['api_key'] === 'smtp2go_test_key'
             && $data['sender'] === 'Acme Sender <sender@example.com>'
             && $data['to'] === ['John Doe <recipient@example.com>']
             && count($data['attachments']) === 1
             && count($data['inlines']) === 1
-            && $data['inlines'][0]['cid'] === 'logo_cid';
+            && $data['inlines'][0]['cid'] === 'logo_cid'
+            && $customHeaders->contains(fn ($h) => $h['header'] === 'X-Tag' && $h['value'] === 'welcome')
+            && $customHeaders->contains(fn ($h) => $h['header'] === 'X-Metadata-tenant' && $h['value'] === 'acme_corp');
     });
 });
 

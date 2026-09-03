@@ -15,6 +15,8 @@ it('runs mailer:status and displays the providers table', function () {
     $breaker = app(CircuitBreaker::class);
     $breaker->trip('smtp2go', 45);
 
+    $this->travelTo(now());
+
     $this->artisan('mailer:status')
         ->expectsTable(
             ['Priority', 'Provider', 'Credentials', 'Circuit Breaker', 'Effective State'],
@@ -25,6 +27,8 @@ it('runs mailer:status and displays the providers table', function () {
             ],
         )
         ->assertSuccessful();
+
+    $this->travelBack();
 });
 
 it('runs mailer:test successfully when provider delivers', function () {

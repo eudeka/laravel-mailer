@@ -64,14 +64,57 @@ final class ResendProvider extends AbstractEmailProvider
             $body['headers'] = $payload->headers;
         }
 
+        $tags = [];
+
+        foreach ($payload->tags as $tag) {
+            $tags[] = [
+                'name' => 'tag',
+                'value' => $this->sanitizeTag($tag),
+            ];
+        }
+
+        foreach ($payload->metadata as $name => $value) {
+            $tags[] = [
+                'name' => $this->sanitizeTag($name),
+                'value' => $this->sanitizeTag($value),
+            ];
+        }
+
+        if ($tags !== []) {
+            $body['tags'] = $tags;
+        }
+
         if ($payload->attachments !== []) {
-            $body['attachments'] = array_map(fn (EmailAttachment $att): array => [
-                'filename' => $att->filename,
-                'content' => $att->contentBase64,
-            ], $payload->attachments);
+            $body['attachments'] = array_map(function (EmailAttachment $att): array {
+                $attachment = [
+                    'filename' => $att->filename,
+                    'content' => $att->contentBase64,
+                ];
+
+                if ($att->isInline && $att->contentId !== null) {
+                    $attachment['content_id'] = $att->contentId;
+                }
+
+                if ($att->mimeType !== '') {
+                    $attachment['content_type'] = $att->mimeType;
+                }
+
+                return $attachment;
+            }, $payload->attachments);
         }
 
         return $this->postJson($headers, $body);
+    }
+
+    /**
+     * Sanitize tag name/value according to Resend API requirements (a-z, A-Z, 0-9, _, -).
+     */
+    private function sanitizeTag(string $value): string
+    {
+        $sanitized = (string) preg_replace('/[^a-zA-Z0-9_\-]/', '_', $value);
+        $trimmed = trim($sanitized, '_-');
+
+        return substr($trimmed !== '' ? $trimmed : 'default', 0, 256);
     }
 
     protected function handleHttpResponse(Response $response): ProviderResponse

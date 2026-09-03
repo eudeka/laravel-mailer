@@ -180,26 +180,14 @@ php artisan vendor:publish --tag="mailer-config"
 
 ---
 
-### 5. Register Mailer Driver
+### 5. Configure `.env`
 
-In your application's `config/mail.php`, register the `multi-vendor` driver:
+You don't need to manually edit `config/mail.php`! The package automatically registers the transports and default mailers (`multi-vendor`, `resend`, `brevo`, and `smtp2go`) into Laravel's mail configuration.
 
-```php
-'mailers' => [
-    // ...
-    'multi-vendor' => [
-        'transport' => 'multi-vendor', // or alias 'mailer'
-    ],
-],
-```
-
----
-
-### 6. Configure `.env`
-
-Set the mail driver and add your API credentials:
+Simply set `MAIL_MAILER` to your preferred mode and provide the relevant API credentials:
 
 ```env
+# Choose: 'multi-vendor' (failover), 'resend', 'brevo', or 'smtp2go'
 MAIL_MAILER=multi-vendor
 MAIL_FROM_ADDRESS="noreply@example.com"
 MAIL_FROM_NAME="${APP_NAME}"
@@ -209,11 +197,24 @@ RESEND_API_KEY=re_123456789abcdef
 BREVO_API_KEY=xkeysib-123456789abcdef
 SMTP2GO_API_KEY=api-123456789abcdef
 
-# Circuit Breaker Options (Optional)
+# Circuit Breaker Options (multi-vendor mode)
 MAILER_CIRCUIT_BREAKER_ENABLED=true
 MAILER_COOLDOWN_SECONDS=60
 # MAILER_CACHE_STORE=redis
 # MAILER_CACHE_PREFIX=laravel_mailer_breaker:
+```
+
+### 6. (Optional) Custom Mailer Overrides in `config/mail.php`
+
+If you want custom instances (e.g. dedicated transactional vs marketing mailers with different API keys), you can optionally define them in `config/mail.php`:
+
+```php
+'mailers' => [
+    'resend-marketing' => [
+        'transport' => 'resend',
+        'api_key' => env('RESEND_MARKETING_API_KEY'),
+    ],
+],
 ```
 
 ---
@@ -299,6 +300,38 @@ Inline embedded images inside Blade templates are normalized automatically:
 ```php
 $user->notify(new OrderShippedNotification($order));
 ```
+
+### Tags & Custom Metadata
+
+You can attach tags and metadata to your emails without altering your application logic. Add standard headers in your Mailables, and the package automatically transforms them into the correct format for each provider:
+
+```php
+use Illuminate\Mail\Mailable;
+
+class OrderConfirmationMailable extends Mailable
+{
+    public function build(): self
+    {
+        return $this->subject('Order Confirmation')
+            ->html('<p>Thank you for your order!</p>')
+            ->withSymfonyMessage(function ($email) {
+                // Tags (comma-separated or single)
+                $email->getHeaders()->addTextHeader('X-Tag', 'orders, transactional');
+
+                // Metadata (individual headers or JSON string via X-Metadata)
+                $email->getHeaders()->addTextHeader('X-Metadata-order_id', 'ORD-9842');
+                $email->getHeaders()->addTextHeader('X-Metadata-user_id', 'USR-102');
+            });
+    }
+}
+```
+
+| Provider | Tags Mapping | Metadata Mapping |
+|---|---|---|
+| **Resend** | `tags: [['name' => 'tag', 'value' => 'orders'], ...]` | `tags: [['name' => 'order_id', 'value' => 'ORD-9842'], ...]` |
+| **Brevo** | `tags: ['orders', 'transactional']` | `headers: {'X-Metadata-order_id': 'ORD-9842', ...}` |
+| **SMTP2GO** | `custom_headers: [{'header': 'X-Tag', 'value': '...'}]` | `custom_headers: [{'header': 'X-Metadata-order_id', ...}]` |
+
 
 ---
 

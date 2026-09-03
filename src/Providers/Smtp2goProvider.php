@@ -72,6 +72,20 @@ final class Smtp2goProvider extends AbstractEmailProvider
             ];
         }
 
+        if ($payload->tags !== []) {
+            $customHeaders[] = [
+                'header' => 'X-Tag',
+                'value' => implode(', ', $payload->tags),
+            ];
+        }
+
+        foreach ($payload->metadata as $metaKey => $metaValue) {
+            $customHeaders[] = [
+                'header' => 'X-Metadata-'.$metaKey,
+                'value' => $metaValue,
+            ];
+        }
+
         if ($customHeaders !== []) {
             $body['custom_headers'] = $customHeaders;
         }

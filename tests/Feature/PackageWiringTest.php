@@ -12,6 +12,7 @@ use Eudeka\LaravelMailer\Pipeline\FailoverPipeline;
 use Eudeka\LaravelMailer\Pipeline\ProviderRegistry;
 use Eudeka\LaravelMailer\Resilience\CircuitBreaker;
 use Eudeka\LaravelMailer\Transport\MultiVendorTransport;
+use Eudeka\LaravelMailer\Transport\SingleProviderTransport;
 use Illuminate\Mail\MailManager;
 
 it('resolves all package singletons from the container', function () {
@@ -48,6 +49,22 @@ it('registers the multi-vendor transport driver with Laravel MailManager', funct
 
     $aliasTransport = $mailManager->createSymfonyTransport(['transport' => 'mailer']);
     expect($aliasTransport)->toBeInstanceOf(MultiVendorTransport::class);
+});
+
+it('registers individual drivers and auto-injects default mailers configuration', function () {
+    expect(config('mail.mailers.multi-vendor'))->toBe(['transport' => 'multi-vendor'])
+        ->and(config('mail.mailers.resend'))->toBe(['transport' => 'resend'])
+        ->and(config('mail.mailers.brevo'))->toBe(['transport' => 'brevo'])
+        ->and(config('mail.mailers.smtp2go'))->toBe(['transport' => 'smtp2go']);
+
+    /** @var MailManager $mailManager */
+    $mailManager = app('mail.manager');
+
+    foreach (['resend', 'brevo', 'smtp2go'] as $driver) {
+        $transport = $mailManager->createSymfonyTransport(['transport' => $driver]);
+        expect($transport)->toBeInstanceOf(SingleProviderTransport::class)
+            ->and((string) $transport)->toBe($driver);
+    }
 });
 
 it('allows extending with custom providers via LaravelMailer facade or manager', function () {

@@ -78,3 +78,25 @@ it('normalizes a complete Symfony Email instance', function () {
         ->and($inlineAtt->contentId)->not->toBeNull()
         ->and(base64_decode($inlineAtt->contentBase64))->toBe('inline image content');
 });
+
+it('extracts tags and metadata from headers', function () {
+    $email = new Email;
+    $email->from('sender@example.com')
+        ->to('recipient@example.com')
+        ->subject('Tags & Metadata Test')
+        ->text('Hello');
+
+    $email->getHeaders()->addTextHeader('X-Tag', 'newsletter, promo');
+    $email->getHeaders()->addTextHeader('X-Metadata-user_id', 'user_42');
+    $email->getHeaders()->addTextHeader('X-Metadata', json_encode(['tier' => 'gold', 'region' => 'eu']));
+
+    $normalizer = new PayloadNormalizer;
+    $payload = $normalizer->normalize($email);
+
+    expect($payload->tags)->toContain('newsletter', 'promo')
+        ->and($payload->metadata)->toHaveKey('user_id', 'user_42')
+        ->and($payload->metadata)->toHaveKey('tier', 'gold')
+        ->and($payload->metadata)->toHaveKey('region', 'eu')
+        ->and($payload->headers)->not->toHaveKey('X-Tag')
+        ->and($payload->headers)->not->toHaveKey('X-Metadata-user_id');
+});

@@ -75,13 +75,22 @@ final class BrevoProvider extends AbstractEmailProvider
             ], fn (mixed $val): bool => $val !== null && $val !== '');
         }
 
-        if ($payload->headers !== []) {
-            $body['headers'] = $payload->headers;
+        $headersList = $payload->headers;
+        foreach ($payload->metadata as $metaKey => $metaVal) {
+            $headersList['X-Metadata-'.$metaKey] = $metaVal;
+        }
+
+        if ($headersList !== []) {
+            $body['headers'] = $headersList;
+        }
+
+        if ($payload->tags !== []) {
+            $body['tags'] = array_values(array_unique($payload->tags));
         }
 
         if ($payload->attachments !== []) {
             $body['attachment'] = array_map(fn (EmailAttachment $att): array => [
-                'name' => $att->filename,
+                'name' => ($att->isInline && $att->contentId !== null) ? $att->contentId : $att->filename,
                 'content' => $att->contentBase64,
             ], $payload->attachments);
         }
