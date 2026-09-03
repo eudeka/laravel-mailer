@@ -33,6 +33,10 @@ final class SingleProviderTransport extends AbstractTransport
 
     protected function doSend(SentMessage $message): void
     {
+        if (! $this->provider->hasCredentials()) {
+            throw new TransportException(sprintf('Provider [%s] has no valid API credentials configured.', $this->provider->name()));
+        }
+
         $original = $message->getOriginalMessage();
 
         $email = match (true) {

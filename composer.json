@@ -90,10 +90,7 @@
         "laravel": {
             "providers": [
                 "Eudeka\\LaravelMailer\\LaravelMailerServiceProvider"
-            ],
-            "aliases": {
-                "LaravelMailer": "Eudeka\\LaravelMailer\\Facades\\LaravelMailer"
-            }
+            ]
         }
     },
     "config": {

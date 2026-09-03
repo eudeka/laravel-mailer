@@ -24,7 +24,7 @@ class StandardTestMailable extends Mailable
 }
 
 it('sends email using resend driver directly via Mail facade', function () {
-    config()->set('mailer.providers.resend.api_key', 're_direct_test_key');
+    config()->set('mail.mailers.resend.key', 're_direct_test_key');
     config()->set('mail.default', 'resend');
     config()->set('mail.from.address', 'noreply@myapp.com');
     config()->set('mail.from.name', 'My App');
@@ -49,7 +49,7 @@ it('sends email using resend driver directly via Mail facade', function () {
 });
 
 it('sends email using brevo driver directly via Mail facade', function () {
-    config()->set('mailer.providers.brevo.api_key', 'brevo_direct_test_key');
+    config()->set('mail.mailers.brevo.key', 'brevo_direct_test_key');
     config()->set('mail.default', 'brevo');
     config()->set('mail.from.address', 'noreply@myapp.com');
     config()->set('mail.from.name', 'My App');
@@ -73,7 +73,7 @@ it('sends email using brevo driver directly via Mail facade', function () {
 });
 
 it('sends email using smtp2go driver directly via Mail facade', function () {
-    config()->set('mailer.providers.smtp2go.api_key', 'smtp2go_direct_test_key');
+    config()->set('mail.mailers.smtp2go.key', 'smtp2go_direct_test_key');
     config()->set('mail.default', 'smtp2go');
     config()->set('mail.from.address', 'noreply@myapp.com');
     config()->set('mail.from.name', 'My App');
@@ -106,7 +106,7 @@ it('sends email using smtp2go driver directly via Mail facade', function () {
 it('supports custom mailer config overrides in config/mail.php', function () {
     config()->set('mail.mailers.resend-marketing', [
         'transport' => 'resend',
-        'api_key' => 're_marketing_key',
+        'key' => 're_marketing_key',
     ]);
     config()->set('mail.from.address', 'noreply@myapp.com');
 
@@ -122,7 +122,7 @@ it('supports custom mailer config overrides in config/mail.php', function () {
 });
 
 it('throws TransportException when individual driver API call fails', function () {
-    config()->set('mailer.providers.resend.api_key', 're_invalid_key');
+    config()->set('mail.mailers.resend.key', 're_invalid_key');
     config()->set('mail.default', 'resend');
     config()->set('mail.from.address', 'noreply@myapp.com');
 
@@ -135,4 +135,15 @@ it('throws TransportException when individual driver API call fails', function (
     expect(function () {
         Mail::to('user@example.com')->send(new StandardTestMailable);
     })->toThrow(TransportException::class, 'API key is invalid');
+});
+
+it('throws TransportException when provider has no credentials configured', function () {
+    config()->set('mail.mailers.resend.key', null);
+    config()->set('laravel-mailer.resend.key', null);
+    config()->set('mail.default', 'resend');
+    config()->set('mail.from.address', 'noreply@myapp.com');
+
+    expect(function () {
+        Mail::to('user@example.com')->send(new StandardTestMailable);
+    })->toThrow(TransportException::class, 'no valid API credentials');
 });

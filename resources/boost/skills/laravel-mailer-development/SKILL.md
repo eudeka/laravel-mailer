@@ -13,60 +13,64 @@ Use this skill when a Laravel application needs to integrate the Laravel Mailer 
 
 ## Primary Goal
 
-- apply the `eudeka/laravel-mailer` package's public API in the smallest correct way
+- Apply the `eudeka/laravel-mailer` package in the smallest correct way using standard Laravel Mail APIs.
 
 ## Workflow
 
 ### 1. Inspect the Laravel app context
 
-- confirm the app is a Laravel project
-- inspect the target code paths where the package should be applied
+- Confirm the app is a Laravel project.
+- Inspect the target code paths where email dispatch is configured or used.
 
-### 2. Apply the package's public API
+### 2. Apply the package
 
-- Install from private repository via Composer:
-  ```json
-  "repositories": [
-      {
-          "type": "vcs",
-          "url": "git@github.com:eudeka/laravel-mailer.git"
-      }
-  ]
+- Install from repository via Composer:
+  ```bash
+  composer require eudeka/laravel-mailer
   ```
-  Run `composer require eudeka/laravel-mailer`.
-- Publish the configuration:
-  `php artisan vendor:publish --tag="mailer-config"`
-- Register the mailer transport driver in `config/mail.php`:
-  ```php
-  'mailers' => [
-      'multi-vendor' => [
-          'transport' => 'multi-vendor',
-      ],
-  ],
+- Configure environment variables in `.env`:
+  ```env
+  # Set default mailer to native failover or a specific provider
+  MAIL_MAILER=failover
+
+  # Set provider API credentials (unconfigured providers are pruned automatically from failover)
+  RESEND_API_KEY=re_123456789abcdef
+  BREVO_API_KEY=xkeysib-123456789abcdef
+  SMTP2GO_API_KEY=api-123456789abcdef
+
+  # Optional: Customize failover order (default: resend,brevo,smtp2go)
+  # FAILOVER_MAILERS=resend,brevo
   ```
-- Configure environment variables in `.env` (`MAIL_MAILER=multi-vendor`, `RESEND_API_KEY`, `BREVO_API_KEY`, etc.).
-- Inspect status via `php artisan mailer:status`.
+- Send mail using standard Laravel `Mail` facade or notifications—no code modifications or custom methods needed.
 
 ## Rules, References, and Templates
 
 Read before executing:
 
-- `config/mailer.php`
-- `src/LaravelMailer.php`
-- `src/Facades/LaravelMailer.php`
-- `src/Transport/MultiVendorTransport.php`
+- `src/LaravelMailerServiceProvider.php`
+- `src/Transport/SingleProviderTransport.php`
 
 ## Examples
 
 - Send mail using standard Laravel Mail facade:
   ```php
+  use App\Mail\WelcomeMailable;
+  use Illuminate\Support\Facades\Mail;
+
   Mail::to('user@example.com')->send(new WelcomeMailable);
   ```
-- Extend custom email providers via `LaravelMailer::extend()`:
+
+- Send queued mail:
   ```php
-  LaravelMailer::extend('my-gateway', fn () => new MyGatewayProvider);
+  Mail::to('user@example.com')->queue(new OrderShippedMailable($order));
+  ```
+
+- Send via specific mailer driver:
+  ```php
+  Mail::mailer('resend')->to('user@example.com')->send(new TransactionalMailable);
   ```
 
 ## Anti-patterns
 
-- do not document package internals here; keep the skill focused on adoption in Laravel apps
+- Do not call or expect custom facades like `LaravelMailer::send()`; standard Laravel `Mail` handles all dispatches.
+- Do not publish configuration files unless custom overrides are strictly required; the package is zero-config.
