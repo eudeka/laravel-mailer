@@ -2,6 +2,6 @@
 
 declare(strict_types=1);
 
-use EmailProviderX\EmailProviderX\Tests\TestCase;
+use EmailProvider\EmailProvider\Tests\TestCase;
 
 uses(TestCase::class)->in(__DIR__);

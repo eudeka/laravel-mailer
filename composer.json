@@ -1,13 +1,13 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "eudeka/email-provider-x",
-    "description": "Eudeka Private Package: Email Provider X",
+    "name": "eudeka/email-provider",
+    "description": "Eudeka Email Provider",
     "keywords": [
         "laravel",
         "eudeka",
-        "email-provider-x"
+        "email-provider"
     ],
-    "homepage": "https://github.com/eudeka/email-provider-x",
+    "homepage": "https://github.com/eudeka/email-provider",
     "license": "MIT",
     "authors": [
         {
@@ -32,12 +32,12 @@
     },
     "autoload": {
         "psr-4": {
-            "EmailProviderX\\EmailProviderX\\": "src/"
+            "EmailProvider\\EmailProvider\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "EmailProviderX\\EmailProviderX\\Tests\\": "tests/",
+            "EmailProvider\\EmailProvider\\Tests\\": "tests/",
             "Workbench\\App\\": "workbench/app/",
             "Workbench\\Database\\Factories\\": "workbench/database/factories/",
             "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
@@ -87,8 +87,11 @@
     "extra": {
         "laravel": {
             "providers": [
-                "EmailProviderX\\EmailProviderX\\EmailProviderXServiceProvider"
-            ]
+                "EmailProvider\\EmailProvider\\EmailProviderServiceProvider"
+            ],
+            "aliases": {
+                "EmailProvider": "EmailProvider\\EmailProvider\\Facades\\EmailProvider"
+            }
         }
     },
     "config": {
