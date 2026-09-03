@@ -41,11 +41,18 @@ class LaravelMailerServiceProvider extends ServiceProvider
             /** @var CacheRepository $cache */
             $cache = $cacheFactory->store($store);
 
+            $cooldown = isset($config['cooldown_seconds']) && is_numeric($config['cooldown_seconds'])
+                ? (int) $config['cooldown_seconds']
+                : 60;
+            $prefix = isset($config['cache_prefix']) && is_string($config['cache_prefix'])
+                ? $config['cache_prefix']
+                : 'laravel_mailer_breaker:';
+
             return new CircuitBreaker(
                 cache: $cache,
                 enabled: (bool) ($config['enabled'] ?? true),
-                defaultCooldownSeconds: (int) ($config['cooldown_seconds'] ?? 60),
-                keyPrefix: (string) ($config['cache_prefix'] ?? 'laravel_mailer_breaker:'),
+                defaultCooldownSeconds: $cooldown,
+                keyPrefix: $prefix,
             );
         });
 

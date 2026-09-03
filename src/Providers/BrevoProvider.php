@@ -92,6 +92,7 @@ final class BrevoProvider extends AbstractEmailProvider
     protected function handleHttpResponse(Response $response): ProviderResponse
     {
         $data = $response->json();
+        /** @var array<string, mixed> $raw */
         $raw = is_array($data) ? $data : ['body' => $response->body()];
 
         if ($response->successful()) {

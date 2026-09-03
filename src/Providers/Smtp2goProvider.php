@@ -110,14 +110,29 @@ final class Smtp2goProvider extends AbstractEmailProvider
     protected function handleHttpResponse(Response $response): ProviderResponse
     {
         $data = $response->json();
+        /** @var array<string, mixed> $raw */
         $raw = is_array($data) ? $data : ['body' => $response->body()];
 
+        /** @var array<string, mixed>|null $responseData */
+        $responseData = is_array($data) && isset($data['data']) && is_array($data['data'])
+            ? $data['data']
+            : null;
+
         if ($response->successful()) {
-            if (is_array($data) && isset($data['data']['failed']) && (int) $data['data']['failed'] > 0) {
+            $failedCount = $responseData !== null && isset($responseData['failed']) && is_numeric($responseData['failed'])
+                ? (int) $responseData['failed']
+                : 0;
+
+            if ($failedCount > 0) {
                 $errorMsg = 'SMTP2GO reported recipient delivery failure.';
 
-                if (isset($data['data']['failures'][0]) && is_string($data['data']['failures'][0])) {
-                    $errorMsg = $data['data']['failures'][0];
+                if (
+                    isset($responseData['failures'])
+                    && is_array($responseData['failures'])
+                    && isset($responseData['failures'][0])
+                    && is_string($responseData['failures'][0])
+                ) {
+                    $errorMsg = $responseData['failures'][0];
                 }
 
                 return ProviderResponse::failure(
@@ -128,19 +143,19 @@ final class Smtp2goProvider extends AbstractEmailProvider
                 );
             }
 
-            if (is_array($data) && isset($data['data']['error']) && is_string($data['data']['error'])) {
+            if ($responseData !== null && isset($responseData['error']) && is_string($responseData['error'])) {
                 return ProviderResponse::failure(
                     providerName: $this->name(),
                     statusCode: $response->status(),
-                    errorMessage: sprintf('SMTP2GO API Error: %s', $data['data']['error']),
+                    errorMessage: sprintf('SMTP2GO API Error: %s', $responseData['error']),
                     rawResponse: $raw,
                 );
             }
 
             $messageId = null;
 
-            if (is_array($data) && isset($data['data']['email_id']) && is_string($data['data']['email_id'])) {
-                $messageId = $data['data']['email_id'];
+            if ($responseData !== null && isset($responseData['email_id']) && is_string($responseData['email_id'])) {
+                $messageId = $responseData['email_id'];
             }
 
             return ProviderResponse::success(
@@ -153,8 +168,8 @@ final class Smtp2goProvider extends AbstractEmailProvider
 
         $message = $response->body();
 
-        if (is_array($data) && isset($data['data']['error']) && is_string($data['data']['error'])) {
-            $message = $data['data']['error'];
+        if ($responseData !== null && isset($responseData['error']) && is_string($responseData['error'])) {
+            $message = $responseData['error'];
         }
 
         return ProviderResponse::failure(

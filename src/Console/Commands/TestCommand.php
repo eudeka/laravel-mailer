@@ -50,15 +50,15 @@ final class TestCommand extends Command
         $rawBody = $this->option('body');
         $body = is_string($rawBody) ? $rawBody : '';
 
-        /** @var string $defaultFrom */
+        $configFrom = config('mail.from.address');
         $defaultFrom = is_string($fromAddress) && $fromAddress !== ''
             ? $fromAddress
-            : (string) config('mail.from.address', 'noreply@example.com');
+            : (is_string($configFrom) && $configFrom !== '' ? $configFrom : 'noreply@example.com');
 
-        /** @var string $defaultName */
+        $configName = config('mail.from.name');
         $defaultName = is_string($fromName) && $fromName !== ''
             ? $fromName
-            : (string) config('mail.from.name', 'Laravel Mailer');
+            : (is_string($configName) && $configName !== '' ? $configName : 'Laravel Mailer');
 
         $payload = new NormalizedEmailPayload(
             from: new Address(address: $defaultFrom, name: $defaultName),

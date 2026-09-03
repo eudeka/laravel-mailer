@@ -104,20 +104,24 @@ final class ProviderRegistry
             ? (int) $providerConfig['timeout']
             : 10;
 
+        $endpoint = isset($providerConfig['endpoint']) && is_string($providerConfig['endpoint']) && $providerConfig['endpoint'] !== ''
+            ? $providerConfig['endpoint']
+            : null;
+
         return match ($name) {
             'resend' => new ResendProvider(
                 apiKey: $apiKey,
-                endpoint: (string) ($providerConfig['endpoint'] ?? 'https://api.resend.com/emails'),
+                endpoint: $endpoint ?? 'https://api.resend.com/emails',
                 timeout: $timeout,
             ),
             'brevo' => new BrevoProvider(
                 apiKey: $apiKey,
-                endpoint: (string) ($providerConfig['endpoint'] ?? 'https://api.brevo.com/v3/smtp/email'),
+                endpoint: $endpoint ?? 'https://api.brevo.com/v3/smtp/email',
                 timeout: $timeout,
             ),
             'smtp2go' => new Smtp2goProvider(
                 apiKey: $apiKey,
-                endpoint: (string) ($providerConfig['endpoint'] ?? 'https://api.smtp2go.com/v3/email/send'),
+                endpoint: $endpoint ?? 'https://api.smtp2go.com/v3/email/send',
                 timeout: $timeout,
             ),
             default => null,
