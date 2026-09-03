@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\DTO;
+namespace Eudeka\LaravelMailer\DTO;
 
 final readonly class NormalizedEmailPayload
 {

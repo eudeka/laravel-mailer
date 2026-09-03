@@ -1,13 +1,15 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "eudeka/email-provider",
-    "description": "Eudeka Email Provider",
+    "name": "eudeka/laravel-mailer",
+    "description": "Resilient multi-vendor email transport with failover and circuit breaker for Laravel",
     "keywords": [
         "laravel",
         "eudeka",
-        "email-provider"
+        "mailer",
+        "email",
+        "failover"
     ],
-    "homepage": "https://github.com/eudeka/email-provider",
+    "homepage": "https://github.com/eudeka/laravel-mailer",
     "license": "MIT",
     "authors": [
         {
@@ -32,12 +34,12 @@
     },
     "autoload": {
         "psr-4": {
-            "EmailProvider\\EmailProvider\\": "src/"
+            "Eudeka\\LaravelMailer\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "EmailProvider\\EmailProvider\\Tests\\": "tests/",
+            "Eudeka\\LaravelMailer\\Tests\\": "tests/",
             "Workbench\\App\\": "workbench/app/",
             "Workbench\\Database\\Factories\\": "workbench/database/factories/",
             "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
@@ -87,10 +89,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "EmailProvider\\EmailProvider\\EmailProviderServiceProvider"
+                "Eudeka\\LaravelMailer\\LaravelMailerServiceProvider"
             ],
             "aliases": {
-                "EmailProvider": "EmailProvider\\EmailProvider\\Facades\\EmailProvider"
+                "LaravelMailer": "Eudeka\\LaravelMailer\\Facades\\LaravelMailer"
             }
         }
     },

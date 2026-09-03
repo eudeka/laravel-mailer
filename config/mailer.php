@@ -31,10 +31,10 @@ return [
     |
     */
     'circuit_breaker' => [
-        'enabled' => (bool) env('EMAIL_PROVIDER_CIRCUIT_BREAKER_ENABLED', true),
-        'cooldown_seconds' => (int) env('EMAIL_PROVIDER_COOLDOWN_SECONDS', 60),
-        'cache_store' => env('EMAIL_PROVIDER_CACHE_STORE'),
-        'cache_prefix' => (string) env('EMAIL_PROVIDER_CACHE_PREFIX', 'email_provider_breaker:'),
+        'enabled' => (bool) env('MAILER_CIRCUIT_BREAKER_ENABLED', true),
+        'cooldown_seconds' => (int) env('MAILER_COOLDOWN_SECONDS', 60),
+        'cache_store' => env('MAILER_CACHE_STORE'),
+        'cache_prefix' => (string) env('MAILER_CACHE_PREFIX', 'laravel_mailer_breaker:'),
     ],
 
     /*

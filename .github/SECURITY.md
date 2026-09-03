@@ -8,4 +8,4 @@ Only the latest major version receives security fixes.
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within Email Provider, please send an email to Eudeka at connect@eudeka.id. All security vulnerabilities will be promptly addressed.
+If you discover a security vulnerability within Laravel Mailer, please send an email to Eudeka at connect@eudeka.id. All security vulnerabilities will be promptly addressed.

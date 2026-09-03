@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Pipeline;
+namespace Eudeka\LaravelMailer\Pipeline;
 
-use EmailProvider\EmailProvider\Contracts\EmailProviderInterface;
-use EmailProvider\EmailProvider\Providers\BrevoProvider;
-use EmailProvider\EmailProvider\Providers\ResendProvider;
-use EmailProvider\EmailProvider\Providers\Smtp2goProvider;
+use Eudeka\LaravelMailer\Contracts\EmailProviderInterface;
+use Eudeka\LaravelMailer\Providers\BrevoProvider;
+use Eudeka\LaravelMailer\Providers\ResendProvider;
+use Eudeka\LaravelMailer\Providers\Smtp2goProvider;
 
 final class ProviderRegistry
 {

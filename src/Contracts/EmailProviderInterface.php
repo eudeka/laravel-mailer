@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Contracts;
+namespace Eudeka\LaravelMailer\Contracts;
 
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
 
 interface EmailProviderInterface
 {

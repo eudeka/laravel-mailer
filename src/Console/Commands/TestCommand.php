@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Console\Commands;
+namespace Eudeka\LaravelMailer\Console\Commands;
 
-use EmailProvider\EmailProvider\DTO\Address;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\EmailProvider;
-use EmailProvider\EmailProvider\Exceptions\AllProvidersFailedException;
-use EmailProvider\EmailProvider\Exceptions\NoActiveProvidersException;
+use Eudeka\LaravelMailer\DTO\Address;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\Exceptions\AllProvidersFailedException;
+use Eudeka\LaravelMailer\Exceptions\NoActiveProvidersException;
+use Eudeka\LaravelMailer\LaravelMailer;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -19,7 +19,7 @@ final class TestCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'email-provider:test 
+    protected $signature = 'mailer:test 
                             {recipient : The recipient email address} 
                             {--from= : Sender email address} 
                             {--from-name= : Sender name} 
@@ -36,7 +36,7 @@ final class TestCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(EmailProvider $emailProvider): int
+    public function handle(LaravelMailer $mailer): int
     {
         $rawRecipient = $this->argument('recipient');
         $recipient = is_string($rawRecipient) ? $rawRecipient : '';
@@ -71,7 +71,7 @@ final class TestCommand extends Command
         $this->info(sprintf('Dispatching test email to [%s] via multi-vendor pipeline...', $recipient));
 
         try {
-            $response = $emailProvider->send($payload);
+            $response = $mailer->send($payload);
 
             $this->components->info(sprintf(
                 'Email delivered successfully via provider [%s]! Status code: %d. Message ID: %s',

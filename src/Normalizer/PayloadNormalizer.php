@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Normalizer;
+namespace Eudeka\LaravelMailer\Normalizer;
 
-use EmailProvider\EmailProvider\DTO\Address;
-use EmailProvider\EmailProvider\DTO\EmailAttachment;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\Address;
+use Eudeka\LaravelMailer\DTO\EmailAttachment;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
 use Symfony\Component\Mime\Address as SymfonyAddress;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mime\Header\HeaderInterface;

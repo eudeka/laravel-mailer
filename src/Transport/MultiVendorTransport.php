@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Transport;
+namespace Eudeka\LaravelMailer\Transport;
 
-use EmailProvider\EmailProvider\Normalizer\PayloadNormalizer;
-use EmailProvider\EmailProvider\Pipeline\FailoverPipeline;
+use Eudeka\LaravelMailer\Normalizer\PayloadNormalizer;
+use Eudeka\LaravelMailer\Pipeline\FailoverPipeline;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\SentMessage;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use EmailProvider\EmailProvider\Resilience\CircuitBreaker;
+use Eudeka\LaravelMailer\Resilience\CircuitBreaker;
 use Illuminate\Support\Facades\Cache;
 
 it('identifies healthy providers as available by default', function () {

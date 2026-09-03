@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Resilience;
+namespace Eudeka\LaravelMailer\Resilience;
 
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 
@@ -12,7 +12,7 @@ final readonly class CircuitBreaker
         private CacheRepository $cache,
         private bool $enabled = true,
         private int $defaultCooldownSeconds = 60,
-        private string $keyPrefix = 'email_provider_breaker:',
+        private string $keyPrefix = 'laravel_mailer_breaker:',
     ) {}
 
     /**

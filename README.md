@@ -1,4 +1,4 @@
-# Laravel Multi-Vendor Email Provider
+# Laravel Mailer
 
 Zero-SDK REST-based email transport with dynamic runtime pruning, sequential failover, and cache-backed circuit breaker for Laravel 13+.
 
@@ -104,36 +104,98 @@ sequenceDiagram
 
 ---
 
-## Quick Start
+## Installation (Private Repository)
 
-### 1. Install via Composer
+Because `eudeka/laravel-mailer` is hosted in a private repository (`https://github.com/eudeka/laravel-mailer`), follow these steps in your consuming Laravel application:
 
-```bash
-composer require eudeka/email-provider
+### 1. Add Repository to `composer.json`
+
+Add the VCS repository entry to your consumer application's `composer.json`:
+
+#### Option A: SSH (Recommended for local development)
+```json
+"repositories": [
+    {
+        "type": "vcs",
+        "url": "git@github.com:eudeka/laravel-mailer.git"
+    }
+]
 ```
 
-### 2. Publish Configuration
-
-```bash
-php artisan vendor:publish --tag="email-provider-config"
+#### Option B: HTTPS (Recommended for Docker / CI/CD)
+```json
+"repositories": [
+    {
+        "type": "vcs",
+        "url": "https://github.com/eudeka/laravel-mailer.git"
+    }
+]
 ```
 
-Generates `config/email-provider.php`.
+---
 
-### 3. Register Mailer Driver
+### 2. Configure Git / Composer Authentication
 
-In `config/mail.php`, register the `multi-vendor` driver:
+#### Method A: SSH Key (Local Machine)
+Ensure your SSH public key is added to your GitHub account:
+```bash
+ssh -T git@github.com
+# Should output: Hi <username>! You've successfully authenticated...
+```
+
+#### Method B: GitHub Personal Access Token (CI/CD, Server, Docker)
+Create a GitHub Personal Access Token (PAT) with `repo` (or fine-grained `Contents: read-only` on `eudeka/laravel-mailer`) permission.
+
+Configure Composer globally:
+```bash
+composer config --global github-oauth.github.com <YOUR_GITHUB_TOKEN>
+```
+
+Or configure it per-project in `auth.json` (ensure `auth.json` is added to `.gitignore`):
+```json
+{
+    "github-oauth": {
+        "github.com": "ghp_yourPersonalAccessTokenHere"
+    }
+}
+```
+
+---
+
+### 3. Require the Package
+
+```bash
+composer require eudeka/laravel-mailer
+```
+
+---
+
+### 4. Publish Configuration
+
+Publish the `config/mailer.php` file:
+
+```bash
+php artisan vendor:publish --tag="mailer-config"
+```
+
+---
+
+### 5. Register Mailer Driver
+
+In your application's `config/mail.php`, register the `multi-vendor` driver:
 
 ```php
 'mailers' => [
     // ...
     'multi-vendor' => [
-        'transport' => 'multi-vendor',
+        'transport' => 'multi-vendor', // or alias 'mailer'
     ],
 ],
 ```
 
-### 4. Configure `.env`
+---
+
+### 6. Configure `.env`
 
 Set the mail driver and add your API credentials:
 
@@ -146,12 +208,20 @@ MAIL_FROM_NAME="${APP_NAME}"
 RESEND_API_KEY=re_123456789abcdef
 BREVO_API_KEY=xkeysib-123456789abcdef
 SMTP2GO_API_KEY=api-123456789abcdef
+
+# Circuit Breaker Options (Optional)
+MAILER_CIRCUIT_BREAKER_ENABLED=true
+MAILER_COOLDOWN_SECONDS=60
+# MAILER_CACHE_STORE=redis
+# MAILER_CACHE_PREFIX=laravel_mailer_breaker:
 ```
 
-### 5. Check Setup
+---
+
+### 7. Check Setup
 
 ```bash
-php artisan email-provider:status
+php artisan mailer:status
 ```
 
 ---
@@ -174,7 +244,7 @@ Outbound emails are recorded in `storage/logs/laravel.log`.
 To test the failover pipeline without modifying application code:
 
 ```bash
-php artisan email-provider:test your.email@example.com --subject="Integration Test"
+php artisan mailer:test your.email@example.com --subject="Integration Test"
 ```
 
 ---
@@ -239,7 +309,7 @@ $user->notify(new OrderShippedNotification($order));
 Inspect priority sequence, credential availability, and circuit breaker states:
 
 ```bash
-php artisan email-provider:status
+php artisan mailer:status
 ```
 
 Example output:
@@ -265,7 +335,7 @@ Example output:
 Send an ad-hoc email through the active pipeline:
 
 ```bash
-php artisan email-provider:test recipient@example.com \
+php artisan mailer:test recipient@example.com \
     --from="sender@example.com" \
     --from-name="System Test" \
     --subject="Deliverability Check" \
@@ -276,9 +346,9 @@ php artisan email-provider:test recipient@example.com \
 
 ## Configuration Reference
 
-Default settings in `config/email-provider.php`:
+Default settings in `config/mailer.php`:
 
-| Key | Default | Description |
+| Environment Variable | Default | Description |
 |---|---|---|
 | `RESEND_API_KEY` | `null` | Resend API key. Omit to prune Resend. |
 | `RESEND_ENDPOINT` | `https://api.resend.com/emails` | Resend REST API URL. |
@@ -289,10 +359,10 @@ Default settings in `config/email-provider.php`:
 | `SMTP2GO_API_KEY` | `null` | SMTP2GO API key. Omit to prune SMTP2GO. |
 | `SMTP2GO_ENDPOINT` | `https://api.smtp2go.com/v3/email/send` | SMTP2GO REST API URL. |
 | `SMTP2GO_TIMEOUT` | `10` | Request timeout in seconds. |
-| `EMAIL_PROVIDER_CIRCUIT_BREAKER_ENABLED` | `true` | Enable/disable circuit breaker. |
-| `EMAIL_PROVIDER_COOLDOWN_SECONDS` | `60` | Cooldown period following a 429/5xx error. |
-| `EMAIL_PROVIDER_CACHE_STORE` | `null` | Cache store for breaker states (`null` uses default cache). |
-| `EMAIL_PROVIDER_CACHE_PREFIX` | `email_provider_breaker:` | Cache key prefix for breaker status. |
+| `MAILER_CIRCUIT_BREAKER_ENABLED` | `true` | Enable/disable circuit breaker. |
+| `MAILER_COOLDOWN_SECONDS` | `60` | Cooldown period following a 429/5xx error. |
+| `MAILER_CACHE_STORE` | `null` | Cache store for breaker states (`null` uses default cache). |
+| `MAILER_CACHE_PREFIX` | `laravel_mailer_breaker:` | Cache key prefix for breaker status. |
 
 ---
 
@@ -310,14 +380,14 @@ Listen to pipeline lifecycle events in your `EventServiceProvider` or listeners:
 
 ## Extending with Custom Providers
 
-Implement [`EmailProviderInterface`](src/Contracts/EmailProviderInterface.php) and register via the `EmailProvider` facade:
+Implement [`EmailProviderInterface`](src/Contracts/EmailProviderInterface.php) and register via the `LaravelMailer` facade:
 
 ```php
 namespace App\Services\Email;
 
-use EmailProvider\EmailProvider\Contracts\EmailProviderInterface;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\Contracts\EmailProviderInterface;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
 use Illuminate\Support\Facades\Http;
 
 class PostmarkProvider implements EmailProviderInterface
@@ -338,8 +408,8 @@ class PostmarkProvider implements EmailProviderInterface
             'X-Postmark-Server-Token' => config('services.postmark.token'),
             'Accept' => 'application/json',
         ])->post('https://api.postmarkapp.com/email', [
-            'From' => $payload->from->fullAddress(),
-            'To' => implode(', ', array_map(fn ($to) => $to->fullAddress(), $payload->to)),
+            'From' => $payload->from->format(),
+            'To' => implode(', ', array_map(fn ($to) => $to->format(), $payload->to)),
             'Subject' => $payload->subject,
             'HtmlBody' => $payload->html,
             'TextBody' => $payload->text,
@@ -366,12 +436,12 @@ Register in `AppServiceProvider::boot()`:
 
 ```php
 use App\Services\Email\PostmarkProvider;
-use EmailProvider\EmailProvider\Facades\EmailProvider;
+use Eudeka\LaravelMailer\Facades\LaravelMailer;
 
-EmailProvider::extend('postmark', fn () => new PostmarkProvider());
+LaravelMailer::extend('postmark', fn () => new PostmarkProvider());
 ```
 
-Add `'postmark'` to `'priority'` in `config/email-provider.php`.
+Add `'postmark'` to `'priority'` in `config/mailer.php`.
 
 ---
 
@@ -393,16 +463,20 @@ composer serve        # Start local Testbench workbench server
 ### Codebase Layout
 
 ```text
+config/
+└── mailer.php            # Package configuration
 src/
-├── Console/Commands/   # StatusCommand and TestCommand
-├── Contracts/          # EmailProviderInterface
-├── DTO/                # NormalizedEmailPayload, ProviderResponse, Address, EmailAttachment
-├── Events/             # EmailSentViaProvider, ProviderAttemptFailed, AllProvidersFailed
-├── Exceptions/         # AllProvidersFailedException, NoActiveProvidersException
-├── Facades/            # EmailProvider facade
-├── Normalizer/         # PayloadNormalizer (Symfony Email -> NormalizedEmailPayload)
-├── Pipeline/           # FailoverPipeline and ProviderRegistry
-├── Providers/          # ResendProvider, BrevoProvider, Smtp2goProvider, AbstractEmailProvider
-├── Resilience/         # CircuitBreaker (cache-backed cooldown)
-└── Transport/          # MultiVendorTransport (Symfony Mailer transport driver)
+├── Console/Commands/     # StatusCommand (mailer:status) and TestCommand (mailer:test)
+├── Contracts/            # EmailProviderInterface
+├── DTO/                  # NormalizedEmailPayload, ProviderResponse, Address, EmailAttachment
+├── Events/               # EmailSentViaProvider, ProviderAttemptFailed, AllProvidersFailed
+├── Exceptions/           # AllProvidersFailedException, NoActiveProvidersException
+├── Facades/              # LaravelMailer facade
+├── Normalizer/           # PayloadNormalizer (Symfony Email -> NormalizedEmailPayload)
+├── Pipeline/             # FailoverPipeline and ProviderRegistry
+├── Providers/            # ResendProvider, BrevoProvider, Smtp2goProvider, AbstractEmailProvider
+├── Resilience/           # CircuitBreaker (cache-backed cooldown)
+├── Transport/            # MultiVendorTransport (Symfony Mailer transport driver)
+├── LaravelMailer.php     # Package manager & facade root
+└── LaravelMailerServiceProvider.php # Package service provider
 ```

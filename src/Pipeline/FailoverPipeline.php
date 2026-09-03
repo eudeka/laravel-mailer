@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Pipeline;
+namespace Eudeka\LaravelMailer\Pipeline;
 
-use EmailProvider\EmailProvider\Contracts\EmailProviderInterface;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
-use EmailProvider\EmailProvider\Events\AllProvidersFailed;
-use EmailProvider\EmailProvider\Events\EmailSentViaProvider;
-use EmailProvider\EmailProvider\Events\ProviderAttemptFailed;
-use EmailProvider\EmailProvider\Exceptions\AllProvidersFailedException;
-use EmailProvider\EmailProvider\Exceptions\NoActiveProvidersException;
-use EmailProvider\EmailProvider\Resilience\CircuitBreaker;
+use Eudeka\LaravelMailer\Contracts\EmailProviderInterface;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\Events\AllProvidersFailed;
+use Eudeka\LaravelMailer\Events\EmailSentViaProvider;
+use Eudeka\LaravelMailer\Events\ProviderAttemptFailed;
+use Eudeka\LaravelMailer\Exceptions\AllProvidersFailedException;
+use Eudeka\LaravelMailer\Exceptions\NoActiveProvidersException;
+use Eudeka\LaravelMailer\Resilience\CircuitBreaker;
 use Illuminate\Support\Facades\Log;
 
 final readonly class FailoverPipeline

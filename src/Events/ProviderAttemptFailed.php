@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Events;
+namespace Eudeka\LaravelMailer\Events;
 
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
 use Illuminate\Foundation\Events\Dispatchable;
 
 final readonly class ProviderAttemptFailed

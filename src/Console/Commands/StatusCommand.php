@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Console\Commands;
+namespace Eudeka\LaravelMailer\Console\Commands;
 
-use EmailProvider\EmailProvider\EmailProvider;
+use Eudeka\LaravelMailer\LaravelMailer;
 use Illuminate\Console\Command;
 
 final class StatusCommand extends Command
@@ -14,7 +14,7 @@ final class StatusCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'email-provider:status';
+    protected $signature = 'mailer:status';
 
     /**
      * The console command description.
@@ -26,9 +26,9 @@ final class StatusCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(EmailProvider $emailProvider): int
+    public function handle(LaravelMailer $mailer): int
     {
-        $statuses = $emailProvider->status();
+        $statuses = $mailer->status();
 
         if ($statuses === []) {
             $this->warn('No email providers configured in priority list.');

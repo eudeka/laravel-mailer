@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use EmailProvider\EmailProvider\DTO\Address;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
-use EmailProvider\EmailProvider\Normalizer\PayloadNormalizer;
+use Eudeka\LaravelMailer\DTO\Address;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\Normalizer\PayloadNormalizer;
 use Symfony\Component\Mime\Email;
 
 it('formats address DTO correctly', function () {

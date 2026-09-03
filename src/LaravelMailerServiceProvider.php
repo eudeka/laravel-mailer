@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider;
+namespace Eudeka\LaravelMailer;
 
-use EmailProvider\EmailProvider\Console\Commands\StatusCommand;
-use EmailProvider\EmailProvider\Console\Commands\TestCommand;
-use EmailProvider\EmailProvider\Normalizer\PayloadNormalizer;
-use EmailProvider\EmailProvider\Pipeline\FailoverPipeline;
-use EmailProvider\EmailProvider\Pipeline\ProviderRegistry;
-use EmailProvider\EmailProvider\Resilience\CircuitBreaker;
-use EmailProvider\EmailProvider\Transport\MultiVendorTransport;
+use Eudeka\LaravelMailer\Console\Commands\StatusCommand;
+use Eudeka\LaravelMailer\Console\Commands\TestCommand;
+use Eudeka\LaravelMailer\Normalizer\PayloadNormalizer;
+use Eudeka\LaravelMailer\Pipeline\FailoverPipeline;
+use Eudeka\LaravelMailer\Pipeline\ProviderRegistry;
+use Eudeka\LaravelMailer\Resilience\CircuitBreaker;
+use Eudeka\LaravelMailer\Transport\MultiVendorTransport;
 use Illuminate\Contracts\Cache\Factory;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository;
@@ -18,22 +18,22 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Mail\MailManager;
 use Illuminate\Support\ServiceProvider;
 
-class EmailProviderServiceProvider extends ServiceProvider
+class LaravelMailerServiceProvider extends ServiceProvider
 {
     /**
      * Register any application services.
      */
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/email-provider.php', 'email-provider');
+        $this->mergeConfigFrom(__DIR__.'/../config/mailer.php', 'mailer');
 
-        $this->app->singleton(PayloadNormalizer::class, fn () => new PayloadNormalizer);
+        $this->app->singleton(PayloadNormalizer::class, fn (): PayloadNormalizer => new PayloadNormalizer);
 
         $this->app->singleton(CircuitBreaker::class, function (Application $app): CircuitBreaker {
             /** @var Repository $configRepo */
             $configRepo = $app->make(Repository::class);
             /** @var array<string, mixed> $config */
-            $config = (array) $configRepo->get('email-provider.circuit_breaker', []);
+            $config = (array) $configRepo->get('mailer.circuit_breaker', []);
             $store = isset($config['cache_store']) && is_string($config['cache_store']) ? $config['cache_store'] : null;
 
             /** @var Factory $cacheFactory */
@@ -45,7 +45,7 @@ class EmailProviderServiceProvider extends ServiceProvider
                 cache: $cache,
                 enabled: (bool) ($config['enabled'] ?? true),
                 defaultCooldownSeconds: (int) ($config['cooldown_seconds'] ?? 60),
-                keyPrefix: (string) ($config['cache_prefix'] ?? 'email_provider_breaker:'),
+                keyPrefix: (string) ($config['cache_prefix'] ?? 'laravel_mailer_breaker:'),
             );
         });
 
@@ -53,10 +53,10 @@ class EmailProviderServiceProvider extends ServiceProvider
             /** @var Repository $configRepo */
             $configRepo = $app->make(Repository::class);
             /** @var array<string> $priority */
-            $priority = (array) $configRepo->get('email-provider.priority', []);
+            $priority = (array) $configRepo->get('mailer.priority', []);
 
             /** @var array<string, array<string, mixed>> $providers */
-            $providers = (array) $configRepo->get('email-provider.providers', []);
+            $providers = (array) $configRepo->get('mailer.providers', []);
 
             return new ProviderRegistry(
                 priority: $priority,
@@ -78,14 +78,16 @@ class EmailProviderServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(EmailProvider::class, function (Application $app): EmailProvider {
-            return new EmailProvider(
+        $this->app->singleton(LaravelMailer::class, function (Application $app): LaravelMailer {
+            return new LaravelMailer(
                 registry: $app->make(ProviderRegistry::class),
                 pipeline: $app->make(FailoverPipeline::class),
                 circuitBreaker: $app->make(CircuitBreaker::class),
                 normalizer: $app->make(PayloadNormalizer::class),
             );
         });
+
+        $this->app->alias(LaravelMailer::class, 'laravel-mailer');
     }
 
     /**
@@ -100,8 +102,8 @@ class EmailProviderServiceProvider extends ServiceProvider
         }
 
         $this->publishes([
-            __DIR__.'/../config/email-provider.php' => config_path('email-provider.php'),
-        ], ['email-provider', 'email-provider-config']);
+            __DIR__.'/../config/mailer.php' => config_path('mailer.php'),
+        ], ['mailer', 'mailer-config']);
 
         $this->commands([
             StatusCommand::class,
@@ -117,7 +119,12 @@ class EmailProviderServiceProvider extends ServiceProvider
         if ($this->app->bound('mail.manager')) {
             /** @var MailManager $mailManager */
             $mailManager = $this->app->make('mail.manager');
+
             $mailManager->extend('multi-vendor', function (): MultiVendorTransport {
+                return $this->app->make(MultiVendorTransport::class);
+            });
+
+            $mailManager->extend('mailer', function (): MultiVendorTransport {
                 return $this->app->make(MultiVendorTransport::class);
             });
         }

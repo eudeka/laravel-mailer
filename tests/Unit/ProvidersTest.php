@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use EmailProvider\EmailProvider\DTO\Address;
-use EmailProvider\EmailProvider\DTO\EmailAttachment;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\Providers\BrevoProvider;
-use EmailProvider\EmailProvider\Providers\ResendProvider;
-use EmailProvider\EmailProvider\Providers\Smtp2goProvider;
+use Eudeka\LaravelMailer\DTO\Address;
+use Eudeka\LaravelMailer\DTO\EmailAttachment;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\Providers\BrevoProvider;
+use Eudeka\LaravelMailer\Providers\ResendProvider;
+use Eudeka\LaravelMailer\Providers\Smtp2goProvider;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 

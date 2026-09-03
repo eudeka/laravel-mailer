@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use EmailProvider\EmailProvider\Contracts\EmailProviderInterface;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
-use EmailProvider\EmailProvider\Pipeline\ProviderRegistry;
+use Eudeka\LaravelMailer\Contracts\EmailProviderInterface;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\Pipeline\ProviderRegistry;
 
 it('dynamically prunes providers with missing credentials', function () {
     $registry = new ProviderRegistry(

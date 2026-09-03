@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Providers;
+namespace Eudeka\LaravelMailer\Providers;
 
-use EmailProvider\EmailProvider\DTO\Address;
-use EmailProvider\EmailProvider\DTO\EmailAttachment;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\DTO\Address;
+use Eudeka\LaravelMailer\DTO\EmailAttachment;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
 use Illuminate\Http\Client\Response;
 
 final class ResendProvider extends AbstractEmailProvider

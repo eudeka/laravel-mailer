@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider\Exceptions;
+namespace Eudeka\LaravelMailer\Exceptions;
 
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
 use RuntimeException;
 
 final class AllProvidersFailedException extends RuntimeException

@@ -2,32 +2,41 @@
 
 declare(strict_types=1);
 
-use EmailProvider\EmailProvider\Contracts\EmailProviderInterface;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
-use EmailProvider\EmailProvider\EmailProvider;
-use EmailProvider\EmailProvider\Normalizer\PayloadNormalizer;
-use EmailProvider\EmailProvider\Pipeline\FailoverPipeline;
-use EmailProvider\EmailProvider\Pipeline\ProviderRegistry;
-use EmailProvider\EmailProvider\Resilience\CircuitBreaker;
-use EmailProvider\EmailProvider\Transport\MultiVendorTransport;
+use Eudeka\LaravelMailer\Contracts\EmailProviderInterface;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\Facades\LaravelMailer as LaravelMailerFacade;
+use Eudeka\LaravelMailer\LaravelMailer;
+use Eudeka\LaravelMailer\Normalizer\PayloadNormalizer;
+use Eudeka\LaravelMailer\Pipeline\FailoverPipeline;
+use Eudeka\LaravelMailer\Pipeline\ProviderRegistry;
+use Eudeka\LaravelMailer\Resilience\CircuitBreaker;
+use Eudeka\LaravelMailer\Transport\MultiVendorTransport;
 use Illuminate\Mail\MailManager;
 
 it('resolves all package singletons from the container', function () {
-    expect(app(EmailProvider::class))->toBeInstanceOf(EmailProvider::class)
+    expect(app(LaravelMailer::class))->toBeInstanceOf(LaravelMailer::class)
+        ->and(app('laravel-mailer'))->toBeInstanceOf(LaravelMailer::class)
         ->and(app(CircuitBreaker::class))->toBeInstanceOf(CircuitBreaker::class)
         ->and(app(ProviderRegistry::class))->toBeInstanceOf(ProviderRegistry::class)
         ->and(app(FailoverPipeline::class))->toBeInstanceOf(FailoverPipeline::class)
         ->and(app(PayloadNormalizer::class))->toBeInstanceOf(PayloadNormalizer::class)
         ->and(app(MultiVendorTransport::class))->toBeInstanceOf(MultiVendorTransport::class);
 
-    expect(app(EmailProvider::class))->toBe(app(EmailProvider::class));
+    expect(app(LaravelMailer::class))->toBe(app(LaravelMailer::class));
+});
+
+it('resolves the LaravelMailer facade', function () {
+    expect(LaravelMailerFacade::getFacadeRoot())->toBeInstanceOf(LaravelMailer::class)
+        ->and(LaravelMailerFacade::registry())->toBeInstanceOf(ProviderRegistry::class)
+        ->and(LaravelMailerFacade::pipeline())->toBeInstanceOf(FailoverPipeline::class)
+        ->and(LaravelMailerFacade::circuitBreaker())->toBeInstanceOf(CircuitBreaker::class);
 });
 
 it('merges the package default configuration', function () {
-    expect(config('email-provider.priority'))->toBe(['resend', 'brevo', 'smtp2go'])
-        ->and(config('email-provider.circuit_breaker.enabled'))->toBeTrue()
-        ->and(config('email-provider.circuit_breaker.cooldown_seconds'))->toBe(60);
+    expect(config('mailer.priority'))->toBe(['resend', 'brevo', 'smtp2go'])
+        ->and(config('mailer.circuit_breaker.enabled'))->toBeTrue()
+        ->and(config('mailer.circuit_breaker.cooldown_seconds'))->toBe(60);
 });
 
 it('registers the multi-vendor transport driver with Laravel MailManager', function () {
@@ -36,11 +45,14 @@ it('registers the multi-vendor transport driver with Laravel MailManager', funct
     $transport = $mailManager->createSymfonyTransport(['transport' => 'multi-vendor']);
 
     expect($transport)->toBeInstanceOf(MultiVendorTransport::class);
+
+    $aliasTransport = $mailManager->createSymfonyTransport(['transport' => 'mailer']);
+    expect($aliasTransport)->toBeInstanceOf(MultiVendorTransport::class);
 });
 
-it('allows extending with custom providers via EmailProvider facade or manager', function () {
-    /** @var EmailProvider $manager */
-    $manager = app(EmailProvider::class);
+it('allows extending with custom providers via LaravelMailer facade or manager', function () {
+    /** @var LaravelMailer $manager */
+    $manager = app(LaravelMailer::class);
 
     $manager->extend('custom_gateway', fn () => new class implements EmailProviderInterface
     {
@@ -63,4 +75,21 @@ it('allows extending with custom providers via EmailProvider facade or manager',
     $resolved = $manager->registry()->resolveProvider('custom_gateway');
     expect($resolved)->not->toBeNull()
         ->and($resolved?->name())->toBe('custom_gateway');
+});
+
+it('publishes the mailer configuration file via mailer-config tag', function () {
+    $target = config_path('mailer.php');
+
+    if (file_exists($target)) {
+        unlink($target);
+    }
+
+    $this->artisan('vendor:publish', ['--tag' => 'mailer-config'])
+        ->assertSuccessful();
+
+    expect(file_exists($target))->toBeTrue();
+
+    if (file_exists($target)) {
+        unlink($target);
+    }
 });

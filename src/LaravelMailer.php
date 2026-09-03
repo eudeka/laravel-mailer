@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace EmailProvider\EmailProvider;
+namespace Eudeka\LaravelMailer;
 
-use EmailProvider\EmailProvider\Contracts\EmailProviderInterface;
-use EmailProvider\EmailProvider\DTO\NormalizedEmailPayload;
-use EmailProvider\EmailProvider\DTO\ProviderResponse;
-use EmailProvider\EmailProvider\Normalizer\PayloadNormalizer;
-use EmailProvider\EmailProvider\Pipeline\FailoverPipeline;
-use EmailProvider\EmailProvider\Pipeline\ProviderRegistry;
-use EmailProvider\EmailProvider\Resilience\CircuitBreaker;
+use Eudeka\LaravelMailer\Contracts\EmailProviderInterface;
+use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Eudeka\LaravelMailer\DTO\ProviderResponse;
+use Eudeka\LaravelMailer\Normalizer\PayloadNormalizer;
+use Eudeka\LaravelMailer\Pipeline\FailoverPipeline;
+use Eudeka\LaravelMailer\Pipeline\ProviderRegistry;
+use Eudeka\LaravelMailer\Resilience\CircuitBreaker;
 
-final readonly class EmailProvider
+final readonly class LaravelMailer
 {
     public function __construct(
         private ProviderRegistry $registry,
