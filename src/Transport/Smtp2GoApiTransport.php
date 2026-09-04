@@ -12,20 +12,27 @@ use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\Address;
+use Symfony\Component\Mime\Email;
 use Throwable;
 
 final class Smtp2GoApiTransport extends AbstractTransport
 {
     use ExtractsEmailData;
 
+    private readonly string $endpoint;
+
     public function __construct(
         private readonly ?string $apiKey = null,
-        private readonly string $endpoint = 'https://api.smtp2go.com/v3/email/send',
+        ?string $endpoint = null,
         private readonly int $timeout = 10,
         ?EventDispatcherInterface $dispatcher = null,
         ?LoggerInterface $logger = null,
     ) {
         parent::__construct($dispatcher, $logger);
+
+        $this->endpoint = is_string($endpoint) && trim($endpoint) !== ''
+            ? trim($endpoint)
+            : 'https://api.smtp2go.com/v3/email/send';
     }
 
     public function apiKey(): ?string
@@ -67,18 +74,24 @@ final class Smtp2GoApiTransport extends AbstractTransport
             'sender' => $sender,
             'to' => $to,
             'subject' => (string) $email->getSubject(),
+            'fastaccept' => false,
         ];
 
         $html = $email->getHtmlBody();
+        $text = $email->getTextBody();
 
         if (is_string($html) && $html !== '') {
             $payload['html_body'] = $html;
         }
 
-        $text = $email->getTextBody();
-
         if (is_string($text) && $text !== '') {
             $payload['text_body'] = $text;
+        } elseif (is_string($html) && $html !== '') {
+            $plainTextFallback = trim(strip_tags($html));
+
+            if ($plainTextFallback !== '') {
+                $payload['text_body'] = $plainTextFallback;
+            }
         }
 
         $cc = array_map(fn (Address $addr): string => $this->formatAddress($addr), $email->getCc());
@@ -94,27 +107,46 @@ final class Smtp2GoApiTransport extends AbstractTransport
         }
 
         $rawAttachments = $this->extractAttachments($email);
+        $attachments = [];
+        $inlines = [];
 
-        if ($rawAttachments !== []) {
-            $payload['attachments'] = array_map(
-                fn (array $att): array => [
+        foreach ($rawAttachments as $att) {
+            if ($att['isInline']) {
+                $inlineFilename = $att['filename'];
+
+                if ($att['contentId'] !== null) {
+                    if (is_string($html) && str_contains($html, 'cid:'.$att['contentId'])) {
+                        $inlineFilename = $att['contentId'];
+                    } elseif (is_string($html) && str_contains($html, 'cid:'.$att['filename'])) {
+                        $inlineFilename = $att['filename'];
+                    } else {
+                        $inlineFilename = $att['contentId'];
+                    }
+                }
+
+                $inlines[] = [
+                    'filename' => $inlineFilename,
+                    'fileblob' => $att['content'],
+                    'mimetype' => $att['contentType'],
+                ];
+            } else {
+                $attachments[] = [
                     'filename' => $att['filename'],
                     'fileblob' => $att['content'],
                     'mimetype' => $att['contentType'],
-                ],
-                $rawAttachments,
-            );
+                ];
+            }
         }
 
-        $extracted = $this->extractHeadersTagsAndMetadata($email);
-
-        $customHeaders = [];
-        foreach ($extracted['headers'] as $hName => $hVal) {
-            $customHeaders[] = [
-                'header' => $hName,
-                'value' => $hVal,
-            ];
+        if ($attachments !== []) {
+            $payload['attachments'] = $attachments;
         }
+
+        if ($inlines !== []) {
+            $payload['inlines'] = $inlines;
+        }
+
+        $customHeaders = $this->buildCustomHeaders($email);
 
         if ($customHeaders !== []) {
             $payload['custom_headers'] = $customHeaders;
@@ -122,6 +154,7 @@ final class Smtp2GoApiTransport extends AbstractTransport
 
         try {
             $response = Http::withHeaders([
+                'X-Smtp2go-Api-Key' => $this->apiKey,
                 'api-key' => $this->apiKey,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
@@ -133,48 +166,171 @@ final class Smtp2GoApiTransport extends AbstractTransport
         }
 
         if (! $response->successful()) {
+            $errorCode = $response->json('data.error_code');
             $errorMsg = $response->json('data.error')
                 ?? $response->json('message')
                 ?? $response->body();
 
+            $formattedError = is_string($errorMsg) ? $errorMsg : json_encode($errorMsg);
+
+            if (is_string($errorCode) && $errorCode !== '') {
+                $formattedError = sprintf('[%s] %s', $errorCode, $formattedError);
+            }
+
             throw new TransportException(sprintf(
                 'Failed sending email via SMTP2GO (HTTP %d): %s',
                 $response->status(),
-                is_string($errorMsg) ? $errorMsg : json_encode($errorMsg),
+                $formattedError,
             ));
         }
 
-        $data = $response->json('data');
+        $responseData = $response->json();
 
-        if (is_array($data)) {
-            $failed = $data['failed'] ?? 0;
+        if (! is_array($responseData)) {
+            throw new TransportException('Failed sending email via SMTP2GO: Empty or invalid JSON response.');
+        }
 
-            if (is_numeric($failed) && (int) $failed > 0) {
-                $errorDetail = null;
+        if (isset($responseData['error']) && is_string($responseData['error'])) {
+            $formattedError = $responseData['error'];
 
-                if (isset($data['error']) && is_string($data['error'])) {
-                    $errorDetail = $data['error'];
-                } elseif (isset($data['failures']) && is_array($data['failures']) && isset($data['failures'][0])) {
-                    $firstFailure = $data['failures'][0];
-                    $errorDetail = is_string($firstFailure) ? $firstFailure : json_encode($firstFailure);
-                }
-
-                $errorDetail ??= 'Provider reported delivery failure.';
-
-                throw new TransportException(sprintf(
-                    'Failed sending email via SMTP2GO: %s',
-                    $errorDetail,
-                ));
+            if (isset($responseData['error_code']) && is_string($responseData['error_code']) && $responseData['error_code'] !== '') {
+                $formattedError = sprintf('[%s] %s', $responseData['error_code'], $formattedError);
             }
 
-            $emailId = $data['email_id'] ?? null;
+            throw new TransportException(sprintf('Failed sending email via SMTP2GO: %s', $formattedError));
+        }
 
-            if (is_string($emailId) && $emailId !== '') {
-                $message->setMessageId($emailId);
+        $data = $responseData['data'] ?? null;
+
+        if (! is_array($data)) {
+            throw new TransportException('Failed sending email via SMTP2GO: Missing data payload in provider response.');
+        }
+
+        if (isset($data['error']) && is_string($data['error'])) {
+            $formattedError = $data['error'];
+
+            if (isset($data['error_code']) && is_string($data['error_code']) && $data['error_code'] !== '') {
+                $formattedError = sprintf('[%s] %s', $data['error_code'], $formattedError);
+            }
+
+            throw new TransportException(sprintf('Failed sending email via SMTP2GO: %s', $formattedError));
+        }
+
+        $failed = isset($data['failed']) && is_numeric($data['failed']) ? (int) $data['failed'] : 0;
+        $succeeded = isset($data['succeeded']) && is_numeric($data['succeeded']) ? (int) $data['succeeded'] : 0;
+        $failures = (isset($data['failures']) && is_array($data['failures'])) ? $data['failures'] : [];
+        $emailId = isset($data['email_id']) && is_string($data['email_id']) ? trim($data['email_id']) : '';
+
+        if ($failed > 0 || $succeeded === 0 || $failures !== [] || $emailId === '') {
+            $errorDetail = null;
+
+            if ($failures !== []) {
+                $failuresList = array_map(
+                    fn (mixed $f): string => is_string($f) ? $f : (string) json_encode($f),
+                    $failures,
+                );
+                $errorDetail = implode('; ', $failuresList);
+            } elseif ($failed > 0 && $succeeded === 0) {
+                $errorDetail = sprintf('Provider reported delivery failure (%d failed, 0 succeeded).', $failed);
+            } elseif ($failed > 0) {
+                $errorDetail = sprintf('Provider reported partial delivery failure (%d failed, %d succeeded).', $failed, $succeeded);
+            } elseif ($succeeded === 0) {
+                $errorDetail = 'Provider reported that 0 emails were delivered.';
+            } elseif ($emailId === '') {
+                $errorDetail = 'Provider did not return an email_id indicating delivery acceptance.';
+            }
+
+            $errorDetail ??= 'Provider reported delivery failure.';
+
+            if (isset($data['error_code']) && is_string($data['error_code']) && $data['error_code'] !== '') {
+                $errorDetail = sprintf('[%s] %s', $data['error_code'], $errorDetail);
+            }
+
+            throw new TransportException(sprintf(
+                'Failed sending email via SMTP2GO: %s',
+                $errorDetail,
+            ));
+        }
+
+        $message->setMessageId($emailId);
+        $message->appendDebug('Sent via SMTP2GO API');
+    }
+
+    /**
+     * @return array<int, array{header: string, value: string}>
+     */
+    private function buildCustomHeaders(Email $email): array
+    {
+        $customHeaders = [];
+
+        $replyToAddresses = array_map(
+            fn (Address $addr): string => $this->formatAddress($addr),
+            $email->getReplyTo(),
+        );
+
+        if ($replyToAddresses !== []) {
+            $customHeaders[] = [
+                'header' => 'Reply-To',
+                'value' => implode(', ', $replyToAddresses),
+            ];
+        }
+
+        $headers = $email->getHeaders();
+        foreach (['In-Reply-To', 'References'] as $threadHeader) {
+            if ($headers->has($threadHeader)) {
+                $headerObj = $headers->get($threadHeader);
+
+                if ($headerObj !== null) {
+                    $customHeaders[] = [
+                        'header' => $threadHeader,
+                        'value' => $headerObj->getBodyAsString(),
+                    ];
+                }
             }
         }
 
-        $message->appendDebug('Sent via SMTP2GO API');
+        $extracted = $this->extractHeadersTagsAndMetadata($email);
+
+        $forbiddenHeaders = [
+            'content-type',
+            'content-transfer-encoding',
+            'mime-version',
+            'from',
+            'to',
+            'cc',
+            'bcc',
+            'subject',
+            'reply-to',
+            'in-reply-to',
+            'references',
+        ];
+
+        foreach ($extracted['headers'] as $hName => $hVal) {
+            if (in_array(strtolower($hName), $forbiddenHeaders, true)) {
+                continue;
+            }
+
+            $customHeaders[] = [
+                'header' => $hName,
+                'value' => $hVal,
+            ];
+        }
+
+        foreach ($extracted['tags'] as $tag) {
+            $customHeaders[] = [
+                'header' => 'X-Tag',
+                'value' => $tag,
+            ];
+        }
+
+        foreach ($extracted['metadata'] as $metaKey => $metaVal) {
+            $customHeaders[] = [
+                'header' => sprintf('X-Metadata-%s', $metaKey),
+                'value' => $metaVal,
+            ];
+        }
+
+        return $customHeaders;
     }
 
     public function __toString(): string

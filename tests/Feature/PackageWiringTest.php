@@ -29,7 +29,8 @@ it('registers individual drivers and auto-injects default mailers configuration'
 
     $smtp2go = $mailManager->createSymfonyTransport(['transport' => 'smtp2go']);
     expect($smtp2go)->toBeInstanceOf(Smtp2GoApiTransport::class)
-        ->and((string) $smtp2go)->toBe('smtp2go');
+        ->and((string) $smtp2go)->toBe('smtp2go')
+        ->and($smtp2go->endpoint())->toBe('https://api.smtp2go.com/v3/email/send');
 });
 
 it('registers artisan installer command', function () {
