@@ -39,7 +39,7 @@ flowchart TD
     T2 -->|HTTP 4xx/5xx / Timeout / Unconfigured| Catch2["Throw TransportException<br/>Failover to next"]
     
     Catch2 -->|Attempt 3| T3
-    T3 -->|HTTP 200 (data.succeeded > 0)| Sent
+    T3 -->|"HTTP 200 (data.succeeded > 0)"| Sent
     T3 -->|All Exhausted| Fail["Throw TransportException<br/>All transports failed"]
 ```
 
