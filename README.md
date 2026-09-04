@@ -1,6 +1,6 @@
 # Laravel Mailer
 
-Zero-SDK REST-based email transport drivers (**Brevo**, **Resend**, and **SMTP2GO**) with plug-and-play native failover for Laravel 12+.
+Zero-SDK REST-based email transport drivers (**Brevo**, **Resend**, and **SMTP2GO**) with plug-and-play native failover for Laravel 13+.
 
 ---
 

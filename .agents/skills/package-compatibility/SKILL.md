@@ -1,6 +1,6 @@
 ---
 name: package-compatibility
-description: "Use this skill when reviewing Laravel package compatibility across composer constraints, PHP versions, Laravel versions, Testbench versions, dependency stability lanes, Windows CI, or matrix-sensitive code and workflow changes."
+description: "Use this skill when reviewing Laravel package compatibility across composer constraints, PHP versions, Laravel versions, Testbench versions, dependency stability lanes, or matrix-sensitive code and workflow changes."
 license: MIT
 metadata:
     author: laravel
@@ -10,15 +10,15 @@ metadata:
 
 ## Primary Goal
 
-Keep package code, dependencies, and workflows compatible with the supported Laravel 12/13 and PHP 8.3+ matrix.
+Keep package code, dependencies, and workflows compatible with the supported Laravel 13+ and PHP 8.4+ matrix.
 
 ## Workflow
 
 1. Read `composer.json` first to determine PHP, Laravel, and Testbench constraints.
-2. Check changed code against Laravel 12/13 APIs and PHP 8.3+ syntax before adopting newer framework or language features.
-3. Review `.github/workflows/tests.yml` for dependency stability lanes, prefer-lowest coverage, prefer-stable coverage, and Windows concerns.
+2. Check changed code against Laravel 13+ APIs and PHP 8.4+ syntax before adopting newer framework or language features.
+3. Review `.github/workflows/tests.yml` for dependency stability lanes, prefer-lowest coverage, prefer-stable coverage, and Ubuntu CI matrix concerns.
 4. When changing dependencies, confirm constraints still allow the intended Laravel and Testbench versions.
-5. Validate with the smallest local command available, then rely on CI for full OS and dependency matrix coverage.
+5. Validate with the smallest local command available, then rely on CI for full dependency matrix coverage.
 
 ## References
 
@@ -30,7 +30,7 @@ Keep package code, dependencies, and workflows compatible with the supported Lar
 
 ## Examples
 
-- Review a new Laravel API call by checking whether it exists in Laravel 12 and Laravel 13 before merging it into shared package code.
+- Review a new Laravel API call by checking whether it exists in Laravel 13+ before merging it into shared package code.
 - Review a dependency bump by checking Composer constraints, Testbench constraints, prefer-lowest behavior, and Windows path assumptions.
 
 ## Anti-Patterns

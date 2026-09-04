@@ -70,14 +70,30 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.4"
+          php-version: "8.5"
           ini-values: error_reporting=E_ALL
+          tools: composer:v2
           coverage: none
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-release-${{ hashFiles('**/composer.json') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-release-
 
       - name: Install dependencies
         run: |
           composer update --prefer-dist --no-interaction --no-progress
           composer run prepare
+
+      - name: Build Workbench
+        run: composer run build
 
       - name: PHPStan
         run: composer analyse
