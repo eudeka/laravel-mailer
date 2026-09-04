@@ -46,13 +46,15 @@ trait ExtractsEmailData
      *
      * @return array{email: string, name?: string}
      */
-    protected function addressToArray(SymfonyAddress $address): array
+    protected function addressToArray(SymfonyAddress $address, ?int $maxNameLength = null): array
     {
         $data = ['email' => $address->getAddress()];
         $name = trim($address->getName());
 
         if ($name !== '') {
-            $data['name'] = $name;
+            $data['name'] = $maxNameLength !== null && $maxNameLength > 0
+                ? mb_substr($name, 0, $maxNameLength)
+                : $name;
         }
 
         return $data;
@@ -96,6 +98,8 @@ trait ExtractsEmailData
         $excluded = [
             'from', 'to', 'cc', 'bcc', 'reply-to', 'subject', 'date',
             'content-type', 'mime-version', 'message-id', 'content-transfer-encoding',
+            'return-path', 'sender', 'received', 'dkim-signature', 'comments', 'keywords',
+            'references', 'in-reply-to', 'auto-submitted',
         ];
 
         $headers = [];

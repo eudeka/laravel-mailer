@@ -53,10 +53,10 @@ final class BrevoApiTransport extends AbstractTransport
 
         $fromAddresses = $email->getFrom();
         $sender = isset($fromAddresses[0])
-            ? $this->addressToArray($fromAddresses[0])
+            ? $this->addressToArray($fromAddresses[0], 70)
             : ['email' => 'noreply@example.com'];
 
-        $to = array_map(fn (Address $addr): array => $this->addressToArray($addr), $email->getTo());
+        $to = array_map(fn (Address $addr): array => $this->addressToArray($addr, 70), $email->getTo());
 
         if ($to === []) {
             throw new TransportException('Brevo requires at least one "to" recipient.');
@@ -69,9 +69,25 @@ final class BrevoApiTransport extends AbstractTransport
             'subject' => (string) $email->getSubject(),
         ];
 
+        $rawAttachments = $this->extractAttachments($email);
+
         $html = $email->getHtmlBody();
 
         if (is_string($html) && $html !== '') {
+            foreach ($rawAttachments as $att) {
+                if ($att['isInline'] || $att['contentId'] !== null) {
+                    $dataUri = sprintf('data:%s;base64,%s', $att['contentType'], $att['content']);
+
+                    if ($att['contentId'] !== null && $att['contentId'] !== '') {
+                        $html = str_replace('cid:'.$att['contentId'], $dataUri, $html);
+                    }
+
+                    if ($att['filename'] !== '') {
+                        $html = str_replace('cid:'.$att['filename'], $dataUri, $html);
+                    }
+                }
+            }
+
             $payload['htmlContent'] = $html;
         }
 
@@ -81,13 +97,13 @@ final class BrevoApiTransport extends AbstractTransport
             $payload['textContent'] = $text;
         }
 
-        $cc = array_map(fn (Address $addr): array => $this->addressToArray($addr), $email->getCc());
+        $cc = array_map(fn (Address $addr): array => $this->addressToArray($addr, 70), $email->getCc());
 
         if ($cc !== []) {
             $payload['cc'] = $cc;
         }
 
-        $bcc = array_map(fn (Address $addr): array => $this->addressToArray($addr), $email->getBcc());
+        $bcc = array_map(fn (Address $addr): array => $this->addressToArray($addr, 70), $email->getBcc());
 
         if ($bcc !== []) {
             $payload['bcc'] = $bcc;
@@ -96,10 +112,8 @@ final class BrevoApiTransport extends AbstractTransport
         $replyTo = $email->getReplyTo();
 
         if (isset($replyTo[0])) {
-            $payload['replyTo'] = $this->addressToArray($replyTo[0]);
+            $payload['replyTo'] = $this->addressToArray($replyTo[0], 70);
         }
-
-        $rawAttachments = $this->extractAttachments($email);
 
         if ($rawAttachments !== []) {
             $payload['attachment'] = array_map(
@@ -112,10 +126,37 @@ final class BrevoApiTransport extends AbstractTransport
         }
 
         $extracted = $this->extractHeadersTagsAndMetadata($email);
+        $headers = $extracted['headers'];
+        $metadata = $extracted['metadata'];
 
-        if ($extracted['headers'] !== []) {
-            $payload['headers'] = $extracted['headers'];
+        if ($metadata !== []) {
+            $payload['params'] = $metadata;
+
+            foreach ($metadata as $metaKey => $metaVal) {
+                $headerKey = 'X-Metadata-'.str_replace(' ', '-', ucwords(str_replace(['-', '_'], ' ', (string) $metaKey)));
+
+                if (! isset($headers[$headerKey])) {
+                    $headers[$headerKey] = (string) $metaVal;
+                }
+            }
         }
+
+        $idempotencyKey = null;
+        foreach ($headers as $hKey => $hVal) {
+            if (strcasecmp($hKey, 'idempotency-key') === 0 || strcasecmp($hKey, 'x-idempotency-key') === 0) {
+                $idempotencyKey = (string) $hVal;
+
+                break;
+            }
+        }
+
+        if ($idempotencyKey === null || trim($idempotencyKey) === '') {
+            $idempotencyKey = hash('sha256', $message->getMessage()->toString());
+        }
+
+        $headers['Idempotency-Key'] = $idempotencyKey;
+
+        $payload['headers'] = $headers;
 
         if ($extracted['tags'] !== []) {
             $payload['tags'] = $extracted['tags'];
@@ -134,20 +175,50 @@ final class BrevoApiTransport extends AbstractTransport
         }
 
         if (! $response->successful()) {
-            $errorMsg = $response->json('message') ?? $response->body();
+            $code = $response->json('code');
+            $rawMsg = $response->json('message') ?? $response->body();
+            $msgText = is_string($rawMsg) ? $rawMsg : (json_encode($rawMsg) ?: 'Unknown error');
+
+            $errorMsg = is_string($code) && $code !== ''
+                ? sprintf('code: %s, message: %s', $code, $msgText)
+                : $msgText;
 
             throw new TransportException(sprintf(
                 'Failed sending email via Brevo (HTTP %d): %s',
                 $response->status(),
-                is_string($errorMsg) ? $errorMsg : json_encode($errorMsg),
+                $errorMsg,
             ));
         }
 
-        $messageId = $response->json('messageId');
+        $code = $response->json('code');
+        $error = $response->json('error');
+        $failed = $response->json('failed');
 
-        if (is_string($messageId) && $messageId !== '') {
-            $message->setMessageId($messageId);
+        if (is_string($code) && $code !== '') {
+            $rawMsg = $response->json('message') ?? 'Unknown error';
+
+            throw new TransportException(sprintf(
+                'Failed sending email via Brevo: code: %s, message: %s',
+                $code,
+                is_string($rawMsg) ? $rawMsg : json_encode($rawMsg),
+            ));
         }
+
+        if (is_string($error) && $error !== '') {
+            throw new TransportException(sprintf('Failed sending email via Brevo: %s', $error));
+        }
+
+        if (is_numeric($failed) && (int) $failed > 0) {
+            throw new TransportException('Failed sending email via Brevo: Provider reported delivery failure.');
+        }
+
+        $messageId = $response->json('messageId') ?? $response->json('messageIds.0');
+
+        if (! is_string($messageId) || trim($messageId) === '') {
+            throw new TransportException('Failed sending email via Brevo: Provider returned 2xx response but did not return a valid messageId (email was not accepted).');
+        }
+
+        $message->setMessageId($messageId);
 
         $message->appendDebug('Sent via Brevo API');
     }
