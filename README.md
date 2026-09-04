@@ -47,15 +47,46 @@ flowchart TD
 
 ## Installation
 
-Install the package via Composer:
+Because `eudeka/laravel-mailer` is hosted in a private repository, configure Composer to recognize the repository before requiring it.
+
+### 1. Register Private VCS Repository
+
+Run via CLI (recommended to avoid JSON syntax errors):
 
 ```bash
-composer require eudeka/laravel-mailer
+# Option A: SSH (Default & Recommended)
+composer config repositories.laravel-mailer vcs git@github.com:eudeka/laravel-mailer.git
+
+# Option B: Fallback via HTTPS + GitHub Personal Access Token (PAT)
+composer config repositories.laravel-mailer vcs https://github.com/eudeka/laravel-mailer.git
+composer config --global github-oauth.github.com <YOUR_GITHUB_TOKEN>
 ```
 
-### Quick Setup Command
+Alternatively, add the repository directly to your application's `composer.json`:
 
-Run the interactive installer to configure your host application's `config/mail.php` failover definition and add sample keys to `.env` and `.env.example`:
+```json
+"repositories": [
+    {
+        "type": "vcs",
+        "url": "git@github.com:eudeka/laravel-mailer.git"
+    }
+]
+```
+
+### 2. Require Package with SemVer
+
+Install using a semantic version constraint:
+
+```bash
+composer require "eudeka/laravel-mailer:^1.0"
+```
+
+> [!IMPORTANT]
+> **Always use SemVer version constraints (e.g., `^1.0` or a specific release tag)**. Do not use `dev-main` in consuming applications to prevent unexpected breaking changes and ensure reproducible builds across CI and team environments.
+
+### 3. Run Automated Setup Command
+
+Run the interactive installer to configure your host application's `config/mail.php` failover definition and populate `.env` and `.env.example`:
 
 ```bash
 php artisan eudeka:mailer-install
@@ -179,9 +210,82 @@ class OrderConfirmationMailable extends Mailable
 
 ---
 
-## Testing & Verification
+## AI Coding Agent Integration (`AGENTS.md`)
 
-Run the package test suite:
+If your consumer application uses AI coding agents (such as Antigravity, Cursor, Claude Code, or GitHub Copilot), add the following section to your application's `AGENTS.md`, `.cursorrules`, or workspace rules so AI agents adopt the package accurately:
+
+```markdown
+### Email & Mailers (eudeka/laravel-mailer)
+- Multi-vendor email delivery with automatic failover is handled by `eudeka/laravel-mailer` (Brevo, Resend, SMTP2GO).
+- Use standard Laravel 13 `Mail` facade and Mailables (`Mail::to()->send()` or `->queue()`).
+- DO NOT install vendor SDKs (`resend/resend-php`, `getbrevo/brevo-php`) or invoke custom facades.
+- In tests, use `Mail::fake()` for standard business logic assertions and `MAIL_MAILER=log` for local development.
+- For complete adoption rules, see `vendor/eudeka/laravel-mailer/resources/boost/skills/laravel-mailer-development/SKILL.md`.
+```
+
+> [!TIP]
+> If your application uses **Laravel Boost**, the bundled skill under `resources/boost/skills/laravel-mailer-development/SKILL.md` is automatically indexed by the Boost MCP server upon package installation.
+
+---
+
+## Testing & Local Development
+
+### 1. Local Development (`MAIL_MAILER=log`)
+
+To prevent burning third-party API quotas during local development, set your driver to `log` in `.env`:
+
+```env
+MAIL_MAILER=log
+```
+
+Emails will be written to `storage/logs/laravel.log` without contacting external REST endpoints.
+
+### 2. Application Logic Testing (`Mail::fake()`)
+
+Use standard Laravel `Mail::fake()` in your consumer application feature tests:
+
+```php
+use App\Mail\OrderShippedMailable;
+use Illuminate\Support\Facades\Mail;
+
+it('sends an order confirmation email', function () {
+    Mail::fake();
+
+    // Trigger your business logic here...
+
+    Mail::assertSent(OrderShippedMailable::class, function ($mail) {
+        return $mail->hasTo('customer@example.com');
+    });
+});
+```
+
+### 3. Failover Verification (`Http::fake()`)
+
+To test that failover correctly switches providers upon external downtime, mock the provider endpoints with `Http::fake()`:
+
+```php
+use App\Mail\OrderShippedMailable;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+
+it('fails over to resend when brevo API is unavailable', function () {
+    Http::fake([
+        'api.brevo.com/*' => Http::response(['message' => 'Service Unavailable'], 503),
+        'api.resend.com/*' => Http::response(['id' => 're_test_success'], 200),
+    ]);
+
+    Mail::to('user@example.com')->send(new OrderShippedMailable($order));
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'api.brevo.com'));
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'api.resend.com'));
+});
+```
+
+---
+
+## Package Development & Verification
+
+For maintainers developing and testing `eudeka/laravel-mailer` itself:
 
 ```bash
 composer test         # Run complete test and analysis pipeline
