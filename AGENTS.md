@@ -26,3 +26,13 @@ This repository is a Laravel package. Keep the package focused, idiomatic, and e
 - `package-release`: use when preparing changelog, release notes, tags, or GitHub release workflow changes.
 - `package-compatibility`: use when reviewing code, dependencies, or CI against the PHP and Laravel support matrix.
 - `package-generate-skill`: use when updating the bundled Boost skill from the package implementation, README, and examples.
+
+## Release Conventions
+
+- Trigger format: commit title MUST match `release: vX.Y.Z` or `chore(release): vX.Y.Z`.
+- Version bump: the release commit must explicitly modify `"version"` in `composer.json` to match `X.Y.Z`.
+- Changelog: `CHANGELOG.md` must contain section `## [vX.Y.Z] - YYYY-MM-DD` detailing highlights, changes, and fixes.
+- Commit message body: mirror the release summary in the commit body beneath the commit title.
+- Validation: always run `composer test` and `composer run build` locally before pushing a release commit.
+- Automation: pushing to `main` automatically triggers `.github/workflows/release.yml` to validate, tag `vX.Y.Z`, and create GitHub Release with notes from `CHANGELOG.md`.
+

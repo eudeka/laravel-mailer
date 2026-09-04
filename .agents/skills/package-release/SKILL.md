@@ -15,10 +15,14 @@ Prepare a safe package release checklist and implementation without tagging, pus
 ## Workflow
 
 1. Review `CHANGELOG.md`, GitHub release workflows, open diff, and pending package changes.
-2. Validate the release state with `composer test` before recommending a release.
-3. Ensure the `"version"` field in `composer.json` is bumped to match the target release version, and included in the release commit.
-4. Review tag naming, release branch, and GitHub release workflow behavior before any release command.
-5. Do not tag, push, or publish without explicit user approval.
+2. Validate the release state with `composer test` and `composer run build` before preparing the release commit.
+3. Ensure the `"version"` field in `composer.json` is bumped to match the target release version (`X.Y.Z`), and included in the release commit.
+4. Update `CHANGELOG.md` with section `## [vX.Y.Z] - YYYY-MM-DD` containing curated highlights and changes.
+5. Format the release commit:
+   - Commit title must strictly follow `release: vX.Y.Z` or `chore(release): vX.Y.Z`.
+   - Commit body must mirror the summary notes from `CHANGELOG.md`.
+6. Review tag naming, release branch (`main`), and GitHub release workflow behavior before pushing.
+7. Do not tag, push, or publish without explicit user approval.
 
 ## References
 
@@ -29,7 +33,7 @@ Prepare a safe package release checklist and implementation without tagging, pus
 
 ## Examples
 
-- Prepare a release by updating `CHANGELOG.md`, bumping `"version"` in `composer.json`, running `composer test`, and pushing a commit with message `chore(release): vX.Y.Z` or `release: vX.Y.Z` to trigger the automated release workflow.
+- Prepare a release by updating `CHANGELOG.md`, bumping `"version"` in `composer.json`, running `composer test`, and pushing a commit with title `release: vX.Y.Z` and body notes to trigger `.github/workflows/release.yml`.
 
 ## Anti-Patterns
 

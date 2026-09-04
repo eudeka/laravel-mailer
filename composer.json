@@ -2,7 +2,7 @@
   "$schema": "https://getcomposer.org/schema.json",
   "name": "eudeka/laravel-mailer",
   "description": "Resilient multi-vendor email transport with failover and circuit breaker for Laravel",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "keywords": [
     "laravel",
     "eudeka",
