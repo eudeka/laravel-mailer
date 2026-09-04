@@ -63,9 +63,39 @@ it('fails over to the second provider when the first encounters a server error',
     Http::assertSent(fn (Request $r) => $r->url() === 'https://api.brevo.com/v3/smtp/email');
 });
 
+it('fails over through 3 providers: Resend (error) -> Brevo (error) -> SMTP2GO (success)', function () {
+    config()->set('mail.mailers.resend.key', 're_test_key');
+    config()->set('mail.mailers.brevo.key', 'brevo_test_key');
+    config()->set('mail.mailers.smtp2go.key', 'smtp2go_test_key');
+    config()->set('mail.mailers.failover', [
+        'transport' => 'failover',
+        'mailers' => ['resend', 'brevo', 'smtp2go'],
+    ]);
+    config()->set('mail.default', 'failover');
+    config()->set('mail.from.address', 'noreply@myapp.com');
+    config()->set('mail.from.name', 'My App');
+
+    Http::fake([
+        'https://api.resend.com/emails' => Http::response(['message' => 'Resend Unavailable'], 503),
+        'https://api.brevo.com/v3/smtp/email' => Http::response(['message' => 'Brevo Timeout'], 504),
+        'https://api.smtp2go.com/v3/email/send' => Http::response([
+            'data' => [
+                'succeeded' => 1,
+                'failed' => 0,
+                'email_id' => 'smtp2go_fallback_success',
+            ],
+        ], 200),
+    ]);
+
+    Mail::to('recipient@example.com')->send(new FailoverTestMailable);
+
+    Http::assertSent(fn (Request $r) => $r->url() === 'https://api.resend.com/emails');
+    Http::assertSent(fn (Request $r) => $r->url() === 'https://api.brevo.com/v3/smtp/email');
+    Http::assertSent(fn (Request $r) => $r->url() === 'https://api.smtp2go.com/v3/email/send');
+});
+
 it('skips unconfigured provider and sends through the next configured provider', function () {
     config()->set('mail.mailers.resend.key', null);
-    config()->set('laravel-mailer.resend.key', null);
     config()->set('mail.mailers.brevo.key', 'brevo_test_key');
     config()->set('mail.mailers.failover', [
         'transport' => 'failover',

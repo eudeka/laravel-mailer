@@ -1,20 +1,20 @@
 # Laravel Mailer
 
-Zero-SDK REST-based email transport drivers (**Resend**, **Brevo**, and **SMTP2GO**) with zero-configuration native failover for Laravel 12+.
+Zero-SDK REST-based email transport drivers (**Brevo**, **Resend**, and **SMTP2GO**) with plug-and-play native failover for Laravel 12+.
 
 ---
 
 ## Overview
 
-`eudeka/laravel-mailer` is a drop-in Laravel package that registers lightweight, REST-based mail drivers for popular email providers without requiring vendor SDKs. It integrates directly with Laravel's built-in `failover` mail transport, enabling resilient multi-provider email delivery with zero application code changes.
+`eudeka/laravel-mailer` is a drop-in Laravel package that registers lightweight, REST-based mail drivers for popular email providers without requiring vendor SDKs. It integrates directly with Symfony and Laravel's native `failover` mail transport, enabling resilient multi-provider email delivery with safe configuration caching.
 
 ### Key Highlights
 
-- **Zero-SDK Footprint**: Built purely on Laravel's native `Illuminate\Support\Facades\Http` client—no bulky third-party vendor SDKs or PSR/Guzzle version conflicts.
-- **Native Laravel Integration**: 100% standard Laravel mail usage (`Mail::to()->send()`, queues, and notifications). No custom facades, no custom sending methods.
-- **Zero-Config Automatic Failover**: Dynamically detects configured API keys in `.env` and automatically registers active providers into Laravel's native `failover` transport.
-- **Drop-in for Existing Projects**: Simply install the package, set `MAIL_MAILER=failover` (or choose a specific driver), and configure provider API keys.
-- **Payload Normalization**: Automatically transforms recipients, HTML/plain text, attachments, embedded images (`$message->embed()`), and tags/metadata into vendor-compliant REST API formats.
+- **Plug and Play**: Simply install via Composer and set environment variables in `.env`—no configuration publishing required.
+- **Zero External SDKs**: Built purely on Laravel's built-in `Illuminate\Support\Facades\Http` client and `symfony/mailer` core components—zero vendor bloat and no PSR/Guzzle version conflicts.
+- **Native Failover Integration**: Leverages Symfony's `FailoverTransport` automatically via `Mail::extend()` and dynamic provider resolution.
+- **Safe Config Caching**: All `.env` mappings are encapsulated within internal configuration (`config/mailers.php`) to ensure complete compatibility with `php artisan config:cache`.
+- **Automated Setup Helper**: Includes `php artisan eudeka:mailer-install` to automatically patch host application `config/mail.php` failover settings and populate `.env` / `.env.example`.
 
 ---
 
@@ -22,25 +22,25 @@ Zero-SDK REST-based email transport drivers (**Resend**, **Brevo**, and **SMTP2G
 
 ```mermaid
 flowchart TD
-    App["Laravel Application<br/>(Mail::to, Notifications, Jobs)"] --> Failover["Native Failover Transport<br/>(Laravel / Symfony Mailer)"]
+    App["Laravel Application<br/>(Mail::to, Notifications, Jobs)"] --> Failover["Symfony / Laravel FailoverTransport<br/>(MAIL_MAILER=failover)"]
     
-    subgraph Drivers["Registered REST Drivers"]
-        P1["Resend Driver"]
-        P2["Brevo Driver"]
-        P3["SMTP2GO Driver"]
+    subgraph Transports["Custom API Transports"]
+        T1["BrevoApiTransport"]
+        T2["ResendApiTransport"]
+        T3["Smtp2GoApiTransport"]
     end
 
-    Failover -->|Attempt 1| P1
-    P1 -->|HTTP 200/202| Sent["Email Delivered"]
-    P1 -->|Error / Timeout / Unconfigured| Fallback1["Catch TransportException<br/>Failover to next"]
+    Failover -->|Attempt 1| T1
+    T1 -->|HTTP 200/201| Sent["Email Delivered"]
+    T1 -->|HTTP 4xx/5xx / Timeout / Unconfigured| Catch1["Throw TransportException<br/>Failover to next"]
     
-    Fallback1 -->|Attempt 2| P2
-    P2 -->|HTTP 200/202| Sent
-    P2 -->|Error / Timeout / Unconfigured| Fallback2["Catch TransportException<br/>Failover to next"]
+    Catch1 -->|Attempt 2| T2
+    T2 -->|HTTP 200/202| Sent
+    T2 -->|HTTP 4xx/5xx / Timeout / Unconfigured| Catch2["Throw TransportException<br/>Failover to next"]
     
-    Fallback2 -->|Attempt 3| P3
-    P3 -->|HTTP 200/202| Sent
-    P3 -->|All Exhausted| Fail["Throw TransportException"]
+    Catch2 -->|Attempt 3| T3
+    T3 -->|HTTP 200 (data.succeeded > 0)| Sent
+    T3 -->|All Exhausted| Fail["Throw TransportException<br/>All transports failed"]
 ```
 
 ---
@@ -53,41 +53,53 @@ Install the package via Composer:
 composer require eudeka/laravel-mailer
 ```
 
+### Quick Setup Command
+
+Run the interactive installer to configure your host application's `config/mail.php` failover definition and add sample keys to `.env` and `.env.example`:
+
+```bash
+php artisan eudeka:mailer-install
+```
+
 ---
 
 ## Configuration
 
-The package is **zero-config**. You do not need to publish configuration files or edit `config/mail.php`.
+The package is **zero-config**. Configuration files do not need to be published unless you wish to customize defaults.
 
-### 1. Configure `.env`
+### 1. Environment Variables (`.env`)
 
-Set `MAIL_MAILER` to `failover` (or a specific provider) and supply your API credentials:
+Set `MAIL_MAILER` to `failover` (or a specific driver) and supply your API keys:
 
 ```env
-# Use native failover across active providers, or specify: 'resend', 'brevo', or 'smtp2go'
+# Default Mailer
 MAIL_MAILER=failover
 
-MAIL_FROM_ADDRESS="noreply@example.com"
+# Sender Identity
+MAIL_FROM_ADDRESS="noreply@yourdomain.com"
 MAIL_FROM_NAME="${APP_NAME}"
 
-# Provider Credentials (only providers with configured keys are included in failover)
-RESEND_API_KEY=re_123456789abcdef
-BREVO_API_KEY=xkeysib-123456789abcdef
-SMTP2GO_API_KEY=api-123456789abcdef
+# Failover Provider Sequence (comma-separated, in priority order)
+MAIL_FAILOVER_MAILERS=brevo,resend,smtp2go
 
-# (Optional) Customize the failover sequence (default: resend,brevo,smtp2go)
-# FAILOVER_MAILERS=resend,brevo
+# Provider API Keys
+MAILER_BREVO_API_KEY=xkeysib-123456789abcdef
+MAILER_RESEND_API_KEY=re_123456789abcdef
+MAILER_SMTP2GO_API_KEY=api-123456789abcdef
 ```
 
-### 2. (Optional) Custom Mailer Overrides in `config/mail.php`
+> [!NOTE]
+> For backward compatibility, legacy environment variables (`BREVO_API_KEY`, `RESEND_API_KEY`, `SMTP2GO_API_KEY`, and `FAILOVER_MAILERS`) are also respected as fallbacks.
 
-If your project requires dedicated mailers with custom endpoints, timeouts, or distinct API keys, define them in `config/mail.php` like any standard Laravel mailer:
+### 2. (Optional) Custom Driver Configurations
+
+If your project requires dedicated endpoints or custom timeouts, define them in your application's `config/mail.php`:
 
 ```php
 'mailers' => [
     'resend-marketing' => [
         'transport' => 'resend',
-        'key' => env('RESEND_MARKETING_API_KEY'),
+        'key' => env('MAILER_RESEND_API_KEY'),
         'timeout' => 15,
     ],
 ],
@@ -99,7 +111,7 @@ If your project requires dedicated mailers with custom endpoints, timeouts, or d
 
 Use Laravel's standard mail APIs exactly as you normally would.
 
-### Mailables
+### Standard Mailables
 
 ```php
 use App\Mail\OrderShippedMailable;
@@ -117,7 +129,7 @@ Mail::to('customer@example.com')->queue(new OrderShippedMailable($order));
 Dispatch via a specific provider on demand:
 
 ```php
-Mail::mailer('resend')->to('customer@example.com')->send(new OrderShippedMailable($order));
+Mail::mailer('brevo')->to('customer@example.com')->send(new OrderShippedMailable($order));
 ```
 
 ### Attachments & Embedded Images
@@ -141,7 +153,7 @@ Embedded images in Blade views are automatically Base64-encoded and attached acc
 <img src="{{ $message->embed(public_path('images/logo.png')) }}" alt="Logo">
 ```
 
-### Tags & Metadata
+### Tags & Custom Headers
 
 Attach tags and metadata using standard Symfony message headers in your Mailables:
 
@@ -155,79 +167,46 @@ class OrderConfirmationMailable extends Mailable
         return $this->subject('Order Confirmation')
             ->html('<p>Thank you for your order!</p>')
             ->withSymfonyMessage(function ($email) {
-                // Tags (comma-separated or single)
+                // Tags
                 $email->getHeaders()->addTextHeader('X-Tag', 'orders, transactional');
 
-                // Metadata (prefixed with X-Metadata-)
-                $email->getHeaders()->addTextHeader('X-Metadata-order_id', 'ORD-9842');
-                $email->getHeaders()->addTextHeader('X-Metadata-user_id', 'USR-102');
+                // Custom Headers
+                $email->getHeaders()->addTextHeader('X-Entity-ID', '12345');
             });
     }
 }
 ```
 
-The payload normalizer translates these headers to match each vendor's API:
-
-| Provider | Tags Mapping | Metadata Mapping |
-|---|---|---|
-| **Resend** | `tags: [['name' => 'tag', 'value' => 'orders'], ...]` | `tags: [['name' => 'order_id', 'value' => 'ORD-9842'], ...]` |
-| **Brevo** | `tags: ['orders', 'transactional']` | `headers: {'X-Metadata-order_id': 'ORD-9842', ...}` |
-| **SMTP2GO** | `custom_headers: [{'header': 'X-Tag', 'value': '...'}]` | `custom_headers: [{'header': 'X-Metadata-order_id', ...}]` |
-
 ---
 
-## Testing & Local Development
+## Testing & Verification
 
-### Daily Development
-
-Use Laravel's built-in `log` driver in local environments:
-
-```env
-MAIL_MAILER=log
-```
-
-Outbound emails will be logged to `storage/logs/laravel.log`.
-
----
-
-## Package Development
-
-Commands for maintaining and testing this repository:
+Run the package test suite:
 
 ```bash
 composer test         # Run complete test and analysis pipeline
 composer test:unit    # Run Pest test suite
 composer test:types   # Verify 100% type coverage
-composer analyse      # Run PHPStan / Larastan static analysis
+composer analyse      # Run PHPStan static analysis
 composer lint:check   # Check code style with Laravel Pint
 composer lint         # Automatically format code with Laravel Pint
-composer build        # Build Orchestra Testbench workbench assets
-composer serve        # Start local Testbench workbench server
 ```
 
 ### Codebase Layout
 
 ```text
 config/
-└── mailer.php                       # Default provider configurations
+└── mailers.php                            # Package internal configuration
 src/
-├── Contracts/
-│   └── EmailProviderInterface.php   # Provider contract
-├── DTO/
-│   ├── Address.php                  # Normalized address DTO
-│   ├── EmailAttachment.php          # Normalized attachment DTO
-│   ├── NormalizedEmailPayload.php   # Normalized email payload DTO
-│   └── ProviderResponse.php         # Provider response DTO
-├── Normalizer/
-│   └── PayloadNormalizer.php        # Symfony Email -> NormalizedEmailPayload
-├── Providers/
-│   ├── AbstractEmailProvider.php    # Base REST provider
-│   ├── BrevoProvider.php            # Brevo REST API driver
-│   ├── ResendProvider.php           # Resend REST API driver
-│   └── Smtp2goProvider.php          # SMTP2GO REST API driver
+├── Commands/
+│   └── MailerInstallCommand.php           # Artisan setup command (eudeka:mailer-install)
 ├── Transport/
-│   └── SingleProviderTransport.php  # Symfony Mailer transport driver
-└── LaravelMailerServiceProvider.php # Auto-registration & dynamic failover
+│   ├── Concerns/
+│   │   └── ExtractsEmailData.php          # Shared MIME, address & attachment normalization trait
+│   ├── BrevoApiTransport.php              # Standalone Brevo REST transport
+│   ├── ResendApiTransport.php             # Standalone Resend REST transport
+│   └── Smtp2GoApiTransport.php            # Standalone SMTP2GO REST transport
+└── LaravelMailerServiceProvider.php       # Provider registration and dynamic failover setup
 ```
 
 ---

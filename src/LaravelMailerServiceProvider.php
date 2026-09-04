@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Eudeka\LaravelMailer;
 
-use Eudeka\LaravelMailer\Normalizer\PayloadNormalizer;
-use Eudeka\LaravelMailer\Providers\BrevoProvider;
-use Eudeka\LaravelMailer\Providers\ResendProvider;
-use Eudeka\LaravelMailer\Providers\Smtp2goProvider;
-use Eudeka\LaravelMailer\Transport\SingleProviderTransport;
+use Eudeka\LaravelMailer\Commands\MailerInstallCommand;
+use Eudeka\LaravelMailer\Transport\BrevoApiTransport;
+use Eudeka\LaravelMailer\Transport\ResendApiTransport;
+use Eudeka\LaravelMailer\Transport\Smtp2GoApiTransport;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Mail\MailManager;
 use Illuminate\Support\ServiceProvider;
-use InvalidArgumentException;
 
 class LaravelMailerServiceProvider extends ServiceProvider
 {
@@ -21,9 +19,17 @@ class LaravelMailerServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/mailer.php', 'laravel-mailer');
+        $this->mergeConfigFrom(__DIR__.'/../config/mailers.php', 'mail.mailers');
 
-        $this->app->singleton(PayloadNormalizer::class, fn (): PayloadNormalizer => new PayloadNormalizer);
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/../config/mailers.php' => config_path('mailers.php'),
+            ], 'mailer-config');
+
+            $this->commands([
+                MailerInstallCommand::class,
+            ]);
+        }
     }
 
     /**
@@ -31,45 +37,8 @@ class LaravelMailerServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->registerDefaultMailers();
         $this->configureFailoverMailer();
         $this->registerMailDrivers();
-    }
-
-    /**
-     * Auto-inject default mailers into mail.mailers configuration if not already configured.
-     */
-    private function registerDefaultMailers(): void
-    {
-        /** @var Repository $configRepo */
-        $configRepo = $this->app->make(Repository::class);
-
-        $defaultMailers = [
-            'resend' => [
-                'transport' => 'resend',
-                'key' => $configRepo->get('laravel-mailer.resend.key'),
-                'endpoint' => $configRepo->get('laravel-mailer.resend.endpoint'),
-                'timeout' => $configRepo->get('laravel-mailer.resend.timeout', 10),
-            ],
-            'brevo' => [
-                'transport' => 'brevo',
-                'key' => $configRepo->get('laravel-mailer.brevo.key'),
-                'endpoint' => $configRepo->get('laravel-mailer.brevo.endpoint'),
-                'timeout' => $configRepo->get('laravel-mailer.brevo.timeout', 10),
-            ],
-            'smtp2go' => [
-                'transport' => 'smtp2go',
-                'key' => $configRepo->get('laravel-mailer.smtp2go.key'),
-                'endpoint' => $configRepo->get('laravel-mailer.smtp2go.endpoint'),
-                'timeout' => $configRepo->get('laravel-mailer.smtp2go.timeout', 10),
-            ],
-        ];
-
-        foreach ($defaultMailers as $name => $definition) {
-            if (! $configRepo->has("mail.mailers.{$name}")) {
-                $configRepo->set("mail.mailers.{$name}", $definition);
-            }
-        }
     }
 
     /**
@@ -80,73 +49,82 @@ class LaravelMailerServiceProvider extends ServiceProvider
         /** @var Repository $configRepo */
         $configRepo = $this->app->make(Repository::class);
 
-        /** @var string|array<string>|null $configuredFailover */
-        $configuredFailover = $configRepo->get('laravel-mailer.failover_mailers');
+        /** @var mixed $configuredFailover */
+        $configuredFailover = $configRepo->get('mail.mailers.failover.mailers');
+        $isDefaultLaravelFailover = $configuredFailover === ['smtp', 'log'] || empty($configuredFailover);
+
         $explicitOrder = false;
+        $priorityList = ['brevo', 'resend', 'smtp2go'];
 
         if (is_string($configuredFailover) && trim($configuredFailover) !== '') {
-            $priorityList = array_map('trim', explode(',', $configuredFailover));
+            $priorityList = array_values(array_filter(array_map('trim', explode(',', $configuredFailover))));
             $explicitOrder = true;
-        } elseif (is_array($configuredFailover) && ! empty($configuredFailover)) {
+        } elseif (is_array($configuredFailover) && ! $isDefaultLaravelFailover) {
             /** @var array<string> $priorityList */
-            $priorityList = $configuredFailover;
+            $priorityList = array_values($configuredFailover);
             $explicitOrder = true;
-        } else {
-            $priorityList = ['resend', 'brevo', 'smtp2go'];
         }
 
         $activeProviders = [];
         foreach ($priorityList as $driver) {
             $key = $configRepo->get("mail.mailers.{$driver}.key")
-                ?? $configRepo->get("mail.mailers.{$driver}.api_key")
-                ?? $configRepo->get("laravel-mailer.{$driver}.key");
+                ?? $configRepo->get("mail.mailers.{$driver}.api_key");
 
             if (is_string($key) && trim($key) !== '') {
                 $activeProviders[] = $driver;
             }
         }
 
-        $currentFailover = $configRepo->get('mail.mailers.failover');
-        $currentMailers = is_array($currentFailover) && isset($currentFailover['mailers']) && is_array($currentFailover['mailers'])
-            ? $currentFailover['mailers']
-            : [];
-
-        $isDefaultLaravelFailover = $currentMailers === ['smtp', 'log'] || empty($currentMailers);
-
-        if (! empty($activeProviders) && ($explicitOrder || $isDefaultLaravelFailover || ! $configRepo->has('mail.mailers.failover'))) {
+        if ($activeProviders !== [] && ($isDefaultLaravelFailover || ! $configRepo->has('mail.mailers.failover'))) {
             $configRepo->set('mail.mailers.failover', [
                 'transport' => 'failover',
                 'mailers' => $activeProviders,
             ]);
+        } elseif ($activeProviders !== [] && $explicitOrder) {
+            $configRepo->set('mail.mailers.failover.mailers', $activeProviders);
         }
     }
 
     /**
-     * Register the individual mail transport drivers.
+     * Register the individual mail transport drivers with Laravel's MailManager.
      */
     private function registerMailDrivers(): void
     {
-        if ($this->app->bound('mail.manager')) {
-            /** @var MailManager $mailManager */
-            $mailManager = $this->app->make('mail.manager');
-
-            foreach (['resend', 'brevo', 'smtp2go'] as $driver) {
-                $mailManager->extend($driver, function (array $config = []) use ($driver): SingleProviderTransport {
-                    /** @var array<string, mixed> $typedConfig */
-                    $typedConfig = $config;
-
-                    return $this->createSingleProviderTransport($driver, $typedConfig);
-                });
-            }
+        if (! $this->app->bound('mail.manager')) {
+            return;
         }
+
+        /** @var MailManager $mailManager */
+        $mailManager = $this->app->make('mail.manager');
+
+        $mailManager->extend('brevo', function (array $config = []): BrevoApiTransport {
+            /** @var array<string, mixed> $typedConfig */
+            $typedConfig = $config;
+
+            return $this->createBrevoTransport($typedConfig);
+        });
+
+        $mailManager->extend('resend', function (array $config = []): ResendApiTransport {
+            /** @var array<string, mixed> $typedConfig */
+            $typedConfig = $config;
+
+            return $this->createResendTransport($typedConfig);
+        });
+
+        $mailManager->extend('smtp2go', function (array $config = []): Smtp2GoApiTransport {
+            /** @var array<string, mixed> $typedConfig */
+            $typedConfig = $config;
+
+            return $this->createSmtp2GoTransport($typedConfig);
+        });
     }
 
     /**
-     * Resolve a SingleProviderTransport for the given driver.
+     * Resolve a BrevoApiTransport instance.
      *
      * @param  array<string, mixed>  $config
      */
-    private function createSingleProviderTransport(string $driver, array $config = []): SingleProviderTransport
+    private function createBrevoTransport(array $config = []): BrevoApiTransport
     {
         /** @var Repository $configRepo */
         $configRepo = $this->app->make(Repository::class);
@@ -155,52 +133,106 @@ class LaravelMailerServiceProvider extends ServiceProvider
             ? $config['key']
             : (isset($config['api_key']) && is_string($config['api_key'])
                 ? $config['api_key']
-                : (is_string($configRepo->get("mail.mailers.{$driver}.key"))
-                    ? (string) $configRepo->get("mail.mailers.{$driver}.key")
-                    : (is_string($configRepo->get("mail.mailers.{$driver}.api_key"))
-                        ? (string) $configRepo->get("mail.mailers.{$driver}.api_key")
-                        : (is_string($configRepo->get("laravel-mailer.{$driver}.key"))
-                            ? (string) $configRepo->get("laravel-mailer.{$driver}.key")
-                            : null))));
+                : (is_string($configRepo->get('mail.mailers.brevo.key'))
+                    ? (string) $configRepo->get('mail.mailers.brevo.key')
+                    : (is_string($configRepo->get('mail.mailers.brevo.api_key'))
+                        ? (string) $configRepo->get('mail.mailers.brevo.api_key')
+                        : null)));
 
         $endpoint = isset($config['endpoint']) && is_string($config['endpoint']) && $config['endpoint'] !== ''
             ? $config['endpoint']
-            : (is_string($configRepo->get("mail.mailers.{$driver}.endpoint"))
-                ? (string) $configRepo->get("mail.mailers.{$driver}.endpoint")
-                : (is_string($configRepo->get("laravel-mailer.{$driver}.endpoint"))
-                    ? (string) $configRepo->get("laravel-mailer.{$driver}.endpoint")
-                    : null));
+            : (is_string($configRepo->get('mail.mailers.brevo.endpoint'))
+                ? (string) $configRepo->get('mail.mailers.brevo.endpoint')
+                : 'https://api.brevo.com/v3/smtp/email');
 
         $timeout = isset($config['timeout']) && is_numeric($config['timeout'])
             ? (int) $config['timeout']
-            : (is_numeric($configRepo->get("mail.mailers.{$driver}.timeout"))
-                ? (int) $configRepo->get("mail.mailers.{$driver}.timeout")
-                : (is_numeric($configRepo->get("laravel-mailer.{$driver}.timeout"))
-                    ? (int) $configRepo->get("laravel-mailer.{$driver}.timeout")
-                    : 10));
+            : (is_numeric($configRepo->get('mail.mailers.brevo.timeout'))
+                ? (int) $configRepo->get('mail.mailers.brevo.timeout')
+                : 10);
 
-        $provider = match ($driver) {
-            'resend' => new ResendProvider(
-                apiKey: $apiKey !== '' ? $apiKey : null,
-                endpoint: $endpoint ?? 'https://api.resend.com/emails',
-                timeout: $timeout,
-            ),
-            'brevo' => new BrevoProvider(
-                apiKey: $apiKey !== '' ? $apiKey : null,
-                endpoint: $endpoint ?? 'https://api.brevo.com/v3/smtp/email',
-                timeout: $timeout,
-            ),
-            'smtp2go' => new Smtp2goProvider(
-                apiKey: $apiKey !== '' ? $apiKey : null,
-                endpoint: $endpoint ?? 'https://api.smtp2go.com/v3/email/send',
-                timeout: $timeout,
-            ),
-            default => throw new InvalidArgumentException(sprintf('Unsupported email provider driver [%s].', $driver)),
-        };
+        return new BrevoApiTransport(
+            apiKey: $apiKey !== '' ? $apiKey : null,
+            endpoint: $endpoint,
+            timeout: $timeout,
+        );
+    }
 
-        return new SingleProviderTransport(
-            provider: $provider,
-            normalizer: $this->app->make(PayloadNormalizer::class),
+    /**
+     * Resolve a ResendApiTransport instance.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function createResendTransport(array $config = []): ResendApiTransport
+    {
+        /** @var Repository $configRepo */
+        $configRepo = $this->app->make(Repository::class);
+
+        $apiKey = isset($config['key']) && is_string($config['key'])
+            ? $config['key']
+            : (isset($config['api_key']) && is_string($config['api_key'])
+                ? $config['api_key']
+                : (is_string($configRepo->get('mail.mailers.resend.key'))
+                    ? (string) $configRepo->get('mail.mailers.resend.key')
+                    : (is_string($configRepo->get('mail.mailers.resend.api_key'))
+                        ? (string) $configRepo->get('mail.mailers.resend.api_key')
+                        : null)));
+
+        $endpoint = isset($config['endpoint']) && is_string($config['endpoint']) && $config['endpoint'] !== ''
+            ? $config['endpoint']
+            : (is_string($configRepo->get('mail.mailers.resend.endpoint'))
+                ? (string) $configRepo->get('mail.mailers.resend.endpoint')
+                : 'https://api.resend.com/emails');
+
+        $timeout = isset($config['timeout']) && is_numeric($config['timeout'])
+            ? (int) $config['timeout']
+            : (is_numeric($configRepo->get('mail.mailers.resend.timeout'))
+                ? (int) $configRepo->get('mail.mailers.resend.timeout')
+                : 10);
+
+        return new ResendApiTransport(
+            apiKey: $apiKey !== '' ? $apiKey : null,
+            endpoint: $endpoint,
+            timeout: $timeout,
+        );
+    }
+
+    /**
+     * Resolve a Smtp2GoApiTransport instance.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function createSmtp2GoTransport(array $config = []): Smtp2GoApiTransport
+    {
+        /** @var Repository $configRepo */
+        $configRepo = $this->app->make(Repository::class);
+
+        $apiKey = isset($config['key']) && is_string($config['key'])
+            ? $config['key']
+            : (isset($config['api_key']) && is_string($config['api_key'])
+                ? $config['api_key']
+                : (is_string($configRepo->get('mail.mailers.smtp2go.key'))
+                    ? (string) $configRepo->get('mail.mailers.smtp2go.key')
+                    : (is_string($configRepo->get('mail.mailers.smtp2go.api_key'))
+                        ? (string) $configRepo->get('mail.mailers.smtp2go.api_key')
+                        : null)));
+
+        $endpoint = isset($config['endpoint']) && is_string($config['endpoint']) && $config['endpoint'] !== ''
+            ? $config['endpoint']
+            : (is_string($configRepo->get('mail.mailers.smtp2go.endpoint'))
+                ? (string) $configRepo->get('mail.mailers.smtp2go.endpoint')
+                : 'https://api.smtp2go.com/v3/email/send');
+
+        $timeout = isset($config['timeout']) && is_numeric($config['timeout'])
+            ? (int) $config['timeout']
+            : (is_numeric($configRepo->get('mail.mailers.smtp2go.timeout'))
+                ? (int) $configRepo->get('mail.mailers.smtp2go.timeout')
+                : 10);
+
+        return new Smtp2GoApiTransport(
+            apiKey: $apiKey !== '' ? $apiKey : null,
+            endpoint: $endpoint,
+            timeout: $timeout,
         );
     }
 }

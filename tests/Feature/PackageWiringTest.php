@@ -5,14 +5,11 @@ declare(strict_types=1);
 namespace Eudeka\LaravelMailer\Tests\Feature;
 
 use Eudeka\LaravelMailer\LaravelMailerServiceProvider;
-use Eudeka\LaravelMailer\Normalizer\PayloadNormalizer;
-use Eudeka\LaravelMailer\Transport\SingleProviderTransport;
+use Eudeka\LaravelMailer\Transport\BrevoApiTransport;
+use Eudeka\LaravelMailer\Transport\ResendApiTransport;
+use Eudeka\LaravelMailer\Transport\Smtp2GoApiTransport;
 use Illuminate\Mail\MailManager;
-
-it('binds PayloadNormalizer in container', function () {
-    expect(app(PayloadNormalizer::class))->toBeInstanceOf(PayloadNormalizer::class)
-        ->and(app(PayloadNormalizer::class))->toBe(app(PayloadNormalizer::class));
-});
+use Illuminate\Support\Facades\Artisan;
 
 it('registers individual drivers and auto-injects default mailers configuration', function () {
     expect(config('mail.mailers.resend.transport'))->toBe('resend')
@@ -22,32 +19,42 @@ it('registers individual drivers and auto-injects default mailers configuration'
     /** @var MailManager $mailManager */
     $mailManager = app('mail.manager');
 
-    foreach (['resend', 'brevo', 'smtp2go'] as $driver) {
-        $transport = $mailManager->createSymfonyTransport(['transport' => $driver]);
-        expect($transport)->toBeInstanceOf(SingleProviderTransport::class)
-            ->and((string) $transport)->toBe($driver);
-    }
+    $resend = $mailManager->createSymfonyTransport(['transport' => 'resend']);
+    expect($resend)->toBeInstanceOf(ResendApiTransport::class)
+        ->and((string) $resend)->toBe('resend');
+
+    $brevo = $mailManager->createSymfonyTransport(['transport' => 'brevo']);
+    expect($brevo)->toBeInstanceOf(BrevoApiTransport::class)
+        ->and((string) $brevo)->toBe('brevo');
+
+    $smtp2go = $mailManager->createSymfonyTransport(['transport' => 'smtp2go']);
+    expect($smtp2go)->toBeInstanceOf(Smtp2GoApiTransport::class)
+        ->and((string) $smtp2go)->toBe('smtp2go');
+});
+
+it('registers artisan installer command', function () {
+    $commands = Artisan::all();
+
+    expect($commands)->toHaveKey('eudeka:mailer-install');
 });
 
 it('automatically configures failover mailers when providers have API keys', function () {
     config()->set('mail.mailers.resend.key', 're_123');
     config()->set('mail.mailers.brevo.key', 'brevo_123');
     config()->set('mail.mailers.smtp2go.key', null);
-    config()->set('laravel-mailer.smtp2go.key', null);
     config()->set('mail.mailers.failover.mailers', ['smtp', 'log']);
 
-    // Re-run service provider boot to verify dynamic failover configuration
     app(LaravelMailerServiceProvider::class, ['app' => app()])->boot();
 
     expect(config('mail.mailers.failover.transport'))->toBe('failover')
-        ->and(config('mail.mailers.failover.mailers'))->toBe(['resend', 'brevo']);
+        ->and(config('mail.mailers.failover.mailers'))->toBe(['brevo', 'resend']);
 });
 
-it('respects custom FAILOVER_MAILERS order', function () {
+it('respects custom MAIL_FAILOVER_MAILERS order', function () {
     config()->set('mail.mailers.resend.key', 're_123');
     config()->set('mail.mailers.brevo.key', 'brevo_123');
     config()->set('mail.mailers.smtp2go.key', 'smtp2go_123');
-    config()->set('laravel-mailer.failover_mailers', 'smtp2go,resend');
+    config()->set('mail.mailers.failover.mailers', ['smtp2go', 'resend']);
 
     app(LaravelMailerServiceProvider::class, ['app' => app()])->boot();
 

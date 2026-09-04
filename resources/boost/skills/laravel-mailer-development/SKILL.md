@@ -9,11 +9,11 @@ metadata:
 
 # Laravel Mailer
 
-Use this skill when a Laravel application needs to integrate the Laravel Mailer package.
+Use this skill when a Laravel application needs to integrate the `eudeka/laravel-mailer` package.
 
 ## Primary Goal
 
-- Apply the `eudeka/laravel-mailer` package in the smallest correct way using standard Laravel Mail APIs.
+- Apply the `eudeka/laravel-mailer` package in the smallest correct way using standard Laravel Mail APIs and native failover.
 
 ## Workflow
 
@@ -28,27 +28,37 @@ Use this skill when a Laravel application needs to integrate the Laravel Mailer 
   ```bash
   composer require eudeka/laravel-mailer
   ```
+
+- Run the automated installer to configure host `config/mail.php` and `.env` / `.env.example`:
+  ```bash
+  php artisan eudeka:mailer-install
+  ```
+
 - Configure environment variables in `.env`:
   ```env
   # Set default mailer to native failover or a specific provider
   MAIL_MAILER=failover
 
-  # Set provider API credentials (unconfigured providers are pruned automatically from failover)
-  RESEND_API_KEY=re_123456789abcdef
-  BREVO_API_KEY=xkeysib-123456789abcdef
-  SMTP2GO_API_KEY=api-123456789abcdef
+  # Set provider priority order
+  MAIL_FAILOVER_MAILERS=brevo,resend,smtp2go
 
-  # Optional: Customize failover order (default: resend,brevo,smtp2go)
-  # FAILOVER_MAILERS=resend,brevo
+  # Set provider API credentials
+  MAILER_BREVO_API_KEY=xkeysib-123456789abcdef
+  MAILER_RESEND_API_KEY=re_123456789abcdef
+  MAILER_SMTP2GO_API_KEY=api-123456789abcdef
   ```
-- Send mail using standard Laravel `Mail` facade or notifications—no code modifications or custom methods needed.
+
+- Send mail using standard Laravel `Mail` facade or notifications—no custom facades or code modifications needed.
 
 ## Rules, References, and Templates
 
 Read before executing:
 
 - `src/LaravelMailerServiceProvider.php`
-- `src/Transport/SingleProviderTransport.php`
+- `src/Transport/BrevoApiTransport.php`
+- `src/Transport/ResendApiTransport.php`
+- `src/Transport/Smtp2GoApiTransport.php`
+- `src/Commands/MailerInstallCommand.php`
 
 ## Examples
 
@@ -67,7 +77,7 @@ Read before executing:
 
 - Send via specific mailer driver:
   ```php
-  Mail::mailer('resend')->to('user@example.com')->send(new TransactionalMailable);
+  Mail::mailer('brevo')->to('user@example.com')->send(new TransactionalMailable);
   ```
 
 ## Anti-patterns

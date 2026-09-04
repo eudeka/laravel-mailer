@@ -2,78 +2,68 @@
 
 declare(strict_types=1);
 
-namespace Eudeka\LaravelMailer\Normalizer;
+namespace Eudeka\LaravelMailer\Transport\Concerns;
 
-use Eudeka\LaravelMailer\DTO\Address;
-use Eudeka\LaravelMailer\DTO\EmailAttachment;
-use Eudeka\LaravelMailer\DTO\NormalizedEmailPayload;
+use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mime\Address as SymfonyAddress;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mime\Header\HeaderInterface;
+use Symfony\Component\Mime\Message;
+use Symfony\Component\Mime\MessageConverter;
 
-final readonly class PayloadNormalizer
+trait ExtractsEmailData
 {
     /**
-     * Normalize a Symfony Email instance into an internal NormalizedEmailPayload DTO.
+     * Resolve a Symfony Email instance from a SentMessage.
      */
-    public function normalize(Email $email): NormalizedEmailPayload
+    protected function extractEmail(SentMessage $message): Email
     {
-        $fromAddresses = $this->convertAddresses($email->getFrom());
-        $from = $fromAddresses[0] ?? new Address(address: 'noreply@example.com');
+        $original = $message->getOriginalMessage();
 
-        $to = $this->convertAddresses($email->getTo());
-        $cc = $this->convertAddresses($email->getCc());
-        $bcc = $this->convertAddresses($email->getBcc());
-        $replyTo = $this->convertAddresses($email->getReplyTo());
-
-        $subject = (string) $email->getSubject();
-        $text = $email->getTextBody();
-        $html = $email->getHtmlBody();
-
-        $attachments = $this->extractAttachments($email);
-        $headerData = $this->extractHeadersTagsAndMetadata($email);
-
-        return new NormalizedEmailPayload(
-            from: $from,
-            to: $to,
-            subject: $subject,
-            html: is_string($html) ? $html : null,
-            text: is_string($text) ? $text : null,
-            cc: $cc,
-            bcc: $bcc,
-            replyTo: $replyTo,
-            attachments: $attachments,
-            headers: $headerData['headers'],
-            tags: $headerData['tags'],
-            metadata: $headerData['metadata'],
-        );
+        return match (true) {
+            $original instanceof Email => $original,
+            $original instanceof Message => MessageConverter::toEmail($original),
+            default => new Email,
+        };
     }
 
     /**
-     * @param  array<SymfonyAddress>  $addresses
-     * @return array<Address>
+     * Format a Symfony Address into "Name <email>" or "email".
      */
-    private function convertAddresses(array $addresses): array
+    protected function formatAddress(SymfonyAddress $address): string
     {
-        $result = [];
+        $name = trim($address->getName());
 
-        foreach ($addresses as $address) {
-            $name = $address->getName();
-            $result[] = new Address(
-                address: $address->getAddress(),
-                name: $name !== '' ? $name : null,
-            );
+        if ($name !== '') {
+            return sprintf('%s <%s>', $name, $address->getAddress());
         }
 
-        return $result;
+        return $address->getAddress();
     }
 
     /**
-     * Extract attachments and inline embedded images from the email.
+     * Convert a Symfony Address to an associative array for API payloads.
      *
-     * @return array<EmailAttachment>
+     * @return array{email: string, name?: string}
      */
-    private function extractAttachments(Email $email): array
+    protected function addressToArray(SymfonyAddress $address): array
+    {
+        $data = ['email' => $address->getAddress()];
+        $name = trim($address->getName());
+
+        if ($name !== '') {
+            $data['name'] = $name;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Extract attachments and inline embedded files from the email.
+     *
+     * @return array<int, array{filename: string, content: string, contentType: string, isInline: bool, contentId: ?string}>
+     */
+    protected function extractAttachments(Email $email): array
     {
         $attachments = [];
 
@@ -82,16 +72,15 @@ final readonly class PayloadNormalizer
             $filename = $part->getFilename() ?? $part->getName() ?? 'attachment';
             $mimeType = sprintf('%s/%s', $part->getMediaType(), $part->getMediaSubtype());
             $isInline = $part->getDisposition() === 'inline';
-
             $contentId = trim($part->getContentId(), '<>');
 
-            $attachments[] = new EmailAttachment(
-                filename: $filename,
-                contentBase64: base64_encode($rawBody),
-                mimeType: $mimeType,
-                isInline: $isInline,
-                contentId: $contentId !== '' ? $contentId : null,
-            );
+            $attachments[] = [
+                'filename' => $filename,
+                'content' => base64_encode($rawBody),
+                'contentType' => $mimeType,
+                'isInline' => $isInline,
+                'contentId' => $contentId !== '' ? $contentId : null,
+            ];
         }
 
         return $attachments;
@@ -102,7 +91,7 @@ final readonly class PayloadNormalizer
      *
      * @return array{headers: array<string, string>, tags: array<string>, metadata: array<string, string>}
      */
-    private function extractHeadersTagsAndMetadata(Email $email): array
+    protected function extractHeadersTagsAndMetadata(Email $email): array
     {
         $excluded = [
             'from', 'to', 'cc', 'bcc', 'reply-to', 'subject', 'date',
@@ -121,7 +110,6 @@ final readonly class PayloadNormalizer
                 continue;
             }
 
-            // Check if header is a TagHeader class
             if (str_ends_with(get_class($header), 'TagHeader')) {
                 $rawVal = method_exists($header, 'getValue') ? $header->getValue() : null;
                 $val = is_scalar($rawVal) ? (string) $rawVal : $header->getBodyAsString();
@@ -134,7 +122,6 @@ final readonly class PayloadNormalizer
                 continue;
             }
 
-            // Check if header is a MetadataHeader class
             if (str_ends_with(get_class($header), 'MetadataHeader')) {
                 $rawKey = method_exists($header, 'getKey') ? $header->getKey() : null;
                 $rawVal = method_exists($header, 'getValue') ? $header->getValue() : null;
@@ -153,7 +140,6 @@ final readonly class PayloadNormalizer
                 continue;
             }
 
-            // Check for Tag headers by convention (x-tag, x-tags, tag, tags)
             if (in_array($name, ['x-tag', 'x-tags', 'tag', 'tags'], true)) {
                 $val = $header->getBodyAsString();
                 foreach (array_map('trim', explode(',', $val)) as $tag) {
@@ -165,7 +151,6 @@ final readonly class PayloadNormalizer
                 continue;
             }
 
-            // Check for individual metadata header: X-Metadata-{Key}: Value
             if (str_starts_with($name, 'x-metadata-')) {
                 $metaKey = substr($header->getName(), strlen('x-metadata-'));
                 $metadata[$metaKey] = $header->getBodyAsString();
@@ -173,7 +158,6 @@ final readonly class PayloadNormalizer
                 continue;
             }
 
-            // Check for serialized JSON metadata header: X-Metadata: {"key":"val"}
             if ($name === 'x-metadata' || $name === 'metadata') {
                 $val = $header->getBodyAsString();
                 $decoded = json_decode($val, true);
