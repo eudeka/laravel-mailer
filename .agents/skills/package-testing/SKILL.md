@@ -3,7 +3,7 @@ name: package-testing
 description: "Use this skill when writing, editing, fixing, or reviewing package tests with Pest 4/5 and Orchestra Testbench, including TDD, feature tests, unit tests, type coverage, arch tests, workbench behavior, commands, routes, config, migrations, and publishable resources."
 license: MIT
 metadata:
-  author: laravel
+    author: laravel
 ---
 
 # Package Testing

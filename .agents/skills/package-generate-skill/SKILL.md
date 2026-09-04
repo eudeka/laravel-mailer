@@ -3,7 +3,7 @@ name: package-generate-skill
 description: "Use this skill when creating or updating the bundled Laravel Boost skill under resources/boost/skills from the package implementation and package documentation. Trigger after public APIs, commands, config, routes, views, publish tags, README content, or examples change."
 license: MIT
 metadata:
-  author: laravel
+    author: laravel
 ---
 
 # Package Generate Skill

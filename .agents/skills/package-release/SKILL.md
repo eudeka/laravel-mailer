@@ -3,7 +3,7 @@ name: package-release
 description: "Use this skill when preparing Laravel package releases: CHANGELOG.md updates, generated release notes, GitHub release workflows, version checks, tags, release validation, or release automation changes. Never publish autonomously."
 license: MIT
 metadata:
-  author: laravel
+    author: laravel
 ---
 
 # Package Release
@@ -14,24 +14,22 @@ Prepare a safe package release checklist and implementation without tagging, pus
 
 ## Workflow
 
-1. Review `CHANGELOG.md`, generated release notes config, GitHub release workflows, open diff, and pending package changes.
+1. Review `CHANGELOG.md`, GitHub release workflows, open diff, and pending package changes.
 2. Validate the release state with `composer test` before recommending a release.
-3. Confirm whether version metadata needs to change; many Laravel packages rely on Git tags rather than a hardcoded package version.
+3. Ensure the `"version"` field in `composer.json` is bumped to match the target release version, and included in the release commit.
 4. Review tag naming, release branch, and GitHub release workflow behavior before any release command.
 5. Do not tag, push, or publish without explicit user approval.
 
 ## References
 
 - `CHANGELOG.md`
-- `.github/release.yml`
-- `.github/workflows/update-changelog.yml`
+- `.github/workflows/release.yml`
 - `.github/workflows/tests.yml`
 - `composer.json`
 
 ## Examples
 
-- Prepare a release by checking changelog coverage, confirming generated release notes categories, running `composer test`, and drafting the tag command for user approval.
-- Update release notes grouping in `.github/release.yml` when a new label convention is added.
+- Prepare a release by updating `CHANGELOG.md`, bumping `"version"` in `composer.json`, running `composer test`, and pushing a commit with message `chore(release): vX.Y.Z` or `release: vX.Y.Z` to trigger the automated release workflow.
 
 ## Anti-Patterns
 

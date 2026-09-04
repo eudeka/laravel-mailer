@@ -1,4 +1,4 @@
-laravel: '@testbench'
+laravel: "@testbench"
 
 providers:
   # - Workbench\App\Providers\WorkbenchServiceProvider
@@ -10,7 +10,7 @@ seeders:
   - Workbench\Database\Seeders\DatabaseSeeder
 
 workbench:
-  start: '/'
+  start: "/"
   install: true
   health: false
   discovers:

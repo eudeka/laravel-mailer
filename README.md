@@ -23,7 +23,7 @@ Zero-SDK REST-based email transport drivers (**Brevo**, **Resend**, and **SMTP2G
 ```mermaid
 flowchart TD
     App["Laravel Application<br/>(Mail::to, Notifications, Jobs)"] --> Failover["Symfony / Laravel FailoverTransport<br/>(MAIL_MAILER=failover)"]
-    
+
     subgraph Transports["Custom API Transports"]
         T1["BrevoApiTransport"]
         T2["ResendApiTransport"]
@@ -33,11 +33,11 @@ flowchart TD
     Failover -->|Attempt 1| T1
     T1 -->|HTTP 200/201| Sent["Email Delivered"]
     T1 -->|HTTP 4xx/5xx / Timeout / Unconfigured| Catch1["Throw TransportException<br/>Failover to next"]
-    
+
     Catch1 -->|Attempt 2| T2
     T2 -->|HTTP 200/202| Sent
     T2 -->|HTTP 4xx/5xx / Timeout / Unconfigured| Catch2["Throw TransportException<br/>Failover to next"]
-    
+
     Catch2 -->|Attempt 3| T3
     T3 -->|"HTTP 200 (data.succeeded > 0)"| Sent
     T3 -->|All Exhausted| Fail["Throw TransportException<br/>All transports failed"]
@@ -150,7 +150,7 @@ public function attachments(): array
 Embedded images in Blade views are automatically Base64-encoded and attached according to each provider's REST schema:
 
 ```html
-<img src="{{ $message->embed(public_path('images/logo.png')) }}" alt="Logo">
+<img src="{{ $message->embed(public_path('images/logo.png')) }}" alt="Logo" />
 ```
 
 ### Tags & Custom Headers

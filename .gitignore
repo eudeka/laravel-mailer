@@ -1,11 +1,37 @@
-/vendor
-/build
-/.phpunit.cache
-/.phpunit.result.cache
-/coverage
+/vendor/
 composer.lock
-.phpunit.cache
+
+# Test & Coverage Caches
+/build/
+/coverage/
+/.phpunit.cache/
 .phpunit.result.cache
+.pest/
+
+# Static Analysis & Linter Caches
+.phpstan.cache/
+.php-cs-fixer.cache
+
+# Orchestra Testbench & Workbench
+/.testbench-core/
+/testbench/
+/workbench/bootstrap/cache/
+/workbench/storage/
+/workbench/.env*
+!/workbench/.env.example
+
+# Environment
+.env
+.env.backup
+.env.*
+!.env.example
+
+# OS & IDE Files
 .DS_Store
-.idea
-.vscode
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

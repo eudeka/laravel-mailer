@@ -1,0 +1,143 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag & Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.head_commit.message, 'release:') || startsWith(github.event.head_commit.message, 'chore(release):')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Parse & Validate Release Version
+        id: version
+        run: |
+          COMMIT_TITLE=$(git log -1 --pretty=%s)
+          echo "Commit title: $COMMIT_TITLE"
+
+          if [[ "$COMMIT_TITLE" =~ ^(chore\(release\)|release):[[:space:]]*v?([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)[[:space:]]*$ ]]; then
+            RAW_VER="${BASH_REMATCH[2]}"
+            TAG="v${RAW_VER}"
+            echo "Detected release commit version: $RAW_VER (tag: $TAG)"
+          else
+            echo "::error::Commit title does not match expected release format 'chore(release): vX.Y.Z' or 'release: vX.Y.Z': $COMMIT_TITLE"
+            exit 1
+          fi
+
+          if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -qx "composer\.json"; then
+            echo "::error::Release commit must include changes to composer.json!"
+            exit 1
+          fi
+
+          COMPOSER_VER=$(jq -r '.version // empty' composer.json)
+          if [ -z "$COMPOSER_VER" ]; then
+            echo "::error::Field 'version' is missing or empty in composer.json!"
+            exit 1
+          fi
+
+          CLEAN_COMPOSER_VER="${COMPOSER_VER#v}"
+          CLEAN_RAW_VER="${RAW_VER#v}"
+
+          if [ "$CLEAN_COMPOSER_VER" != "$CLEAN_RAW_VER" ]; then
+            echo "::error::Version in composer.json ('$COMPOSER_VER') does not match release version in commit ('$RAW_VER')!"
+            exit 1
+          fi
+
+          echo "version=${RAW_VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Release version verified: composer.json ($COMPOSER_VER) matches commit message ($RAW_VER)"
+
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+            echo "::error::Tag '$TAG' already exists on remote origin!"
+            exit 1
+          fi
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          ini-values: error_reporting=E_ALL
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer update --prefer-dist --no-interaction --no-progress
+          composer run prepare
+
+      - name: PHPStan
+        run: composer analyse
+
+      - name: Linter
+        run: composer lint:check
+
+      - name: Type Coverage
+        run: composer test:types
+
+      - name: Test Suite
+        run: composer test:unit
+
+      - name: Extract Release Notes from CHANGELOG
+        id: notes
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          php -r '
+          $version = ltrim(getenv("RELEASE_VERSION"), "v");
+          $changelog = file_exists("CHANGELOG.md") ? file_get_contents("CHANGELOG.md") : "";
+          $lines = explode("\n", $changelog);
+          $capturing = false;
+          $notes = [];
+          foreach ($lines as $line) {
+              if (preg_match("/^##\s+\[?v?" . preg_quote($version, "/") . "[\]\s\-]/i", $line)) {
+                  $capturing = true;
+                  continue;
+              }
+              if ($capturing) {
+                  if (preg_match("/^##\s+/", $line)) {
+                      break;
+                  }
+                  $notes[] = $line;
+              }
+          }
+          $content = trim(implode("\n", $notes));
+          if (!empty($content)) {
+              file_put_contents("RELEASE_NOTES.md", $content);
+              echo "has_notes=true\n";
+          } else {
+              echo "has_notes=false\n";
+          }
+          ' >> "$GITHUB_OUTPUT"
+
+      - name: Create Git Tag & GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          HAS_NOTES: ${{ steps.notes.outputs.has_notes }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+          if [ "$HAS_NOTES" = "true" ] && [ -s RELEASE_NOTES.md ]; then
+            echo "Creating GitHub Release with notes from CHANGELOG.md..."
+            gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md
+          else
+            echo "Creating GitHub Release with auto-generated notes..."
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
