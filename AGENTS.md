@@ -10,6 +10,18 @@ This repository is a Laravel package. Keep the package focused, idiomatic, and e
 - Prefer explicit Laravel package code over helper abstractions unless the extension point is real.
 - Keep tests focused on observable package behavior through public APIs, service provider wiring, commands, routes, published resources, and documentation promises.
 
+## Mail Transport Architectural Invariants
+
+When adding or modifying email transports in this repository, always adhere to the standards documented in [`docs/mail-transport-guide.md`](docs/mail-transport-guide.md):
+
+- **Zero-SDK REST**: Do NOT install external vendor SDKs. Use `Illuminate\Support\Facades\Http` directly.
+- **Strict Instant Failover**: NEVER call `Http::retry()` inside the transport. Immediately throw `Symfony\Component\Mailer\Exception\TransportException` on any HTTP 4xx/5xx or cURL timeout so `FailoverTransport` switches cleanly.
+- **Trait Sharing**: Always use `Eudeka\LaravelMailer\Transport\Concerns\ExtractsEmailData` for email normalization, plain-text fallback, and RFC address handling.
+- **Deterministic Idempotency**: Always resolve and pass an idempotency key (header/payload) to protect queue retries against duplicate sends.
+- **Strict 2xx Validation**: Do not blindly trust HTTP 200/201/202 responses. Inspect payload for silent errors and verify that a valid non-empty `messageId` was returned before calling `$message->setMessageId()`.
+- **Enrich HTTP 429**: Parse the `Retry-After` header on 429 rate limit responses and include delay duration in the `TransportException` message.
+- **User-Agent**: Always pass `'User-Agent' => 'eudeka-laravel-mailer/1.0'` to prevent Cloudflare / WAF blockades (e.g. Resend 1010).
+
 ## Quick Commands
 
 - Full validation: `composer test`
@@ -18,6 +30,7 @@ This repository is a Laravel package. Keep the package focused, idiomatic, and e
 - Pest tests: `composer test:unit`
 - Workbench build: `composer build`
 - Workbench server: `composer serve`
+- Prettier docs files: `npx prettier . --write`
 
 ## Local Skills
 
@@ -35,4 +48,3 @@ This repository is a Laravel package. Keep the package focused, idiomatic, and e
 - Commit message body: mirror the release summary in the commit body beneath the commit title.
 - Validation: always run `composer test` and `composer run build` locally before pushing a release commit.
 - Automation: pushing to `main` automatically triggers `.github/workflows/release.yml` to validate, tag `vX.Y.Z`, and create GitHub Release with notes from `CHANGELOG.md`.
-

@@ -7,6 +7,7 @@
 First official stable production release of `eudeka/laravel-mailer`.
 
 ### Highlights & Features
+
 - **Zero-SDK REST Transports**: Native lightweight HTTP mail transports for **Brevo**, **Resend**, and **SMTP2GO** without third-party vendor SDKs.
 - **Dynamic Failover Integration**: Direct integration with Laravel and Symfony `FailoverTransport` via `Mail::extend()` and automatic fallback recovery.
 - **Safe Configuration Caching**: Full compatibility with `php artisan config:cache` via encapsulated config mapping (`config/mailers.php`).

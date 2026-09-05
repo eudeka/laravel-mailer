@@ -3,7 +3,7 @@ name: laravel-mailer-development
 description: "Use this skill when installing, configuring, or using eudeka/laravel-mailer in a Laravel 13+ application. Trigger when setting up email transports (Brevo, Resend, SMTP2GO), configuring multi-provider failover, sending transactional emails via Laravel's native Mail facade, writing Mailables, configuring environment variables, or testing email dispatches with Mail::fake() or Http::fake(). Skip when configuring non-email notifications or when maintaining internal package source code."
 license: MIT
 metadata:
-  author: Eudeka
+    author: Eudeka
 ---
 
 # Laravel Mailer
@@ -17,47 +17,52 @@ Apply the `eudeka/laravel-mailer` package in the smallest correct way using stan
 ## Workflow
 
 ### 1. Inspect the Laravel app context
+
 - Confirm the app is a Laravel 13+ project (`php ^8.4`, `illuminate/support ^13.0`).
 - Inspect target code paths where email dispatch, notification, or mail configuration is used.
 
 ### 2. Register private VCS repository & install package
-- Add the private VCS repository via Composer CLI:
-  ```bash
-  # Option A: SSH (Default & Recommended)
-  composer config repositories.laravel-mailer vcs git@github.com:eudeka/laravel-mailer.git
 
-  # Option B: Fallback via HTTPS + GitHub Personal Access Token (PAT)
-  composer config repositories.laravel-mailer vcs https://github.com/eudeka/laravel-mailer.git
-  composer config --global github-oauth.github.com <YOUR_GITHUB_TOKEN>
-  ```
+- Add the private VCS repository via Composer CLI:
+    ```bash
+    # Option A: SSH (Default & Recommended)
+    composer config repositories.laravel-mailer vcs git@github.com:eudeka/laravel-mailer.git
+
+    # Option B: Fallback via HTTPS + GitHub Personal Access Token (PAT)
+    composer config repositories.laravel-mailer vcs https://github.com/eudeka/laravel-mailer.git
+    composer config --global github-oauth.github.com <YOUR_GITHUB_TOKEN>
+    ```
 - Require the package using a strict SemVer constraint (`^1.0`). **Never use `dev-main`**:
-  ```bash
-  composer require "eudeka/laravel-mailer:^1.0"
-  ```
+    ```bash
+    composer require "eudeka/laravel-mailer:^1.0"
+    ```
 - Run the setup helper to configure host `config/mail.php` failover array and populate `.env` / `.env.example`:
-  ```bash
-  php artisan eudeka:mailer-install
-  ```
+    ```bash
+    php artisan eudeka:mailer-install
+    ```
 
 ### 3. Configure environment variables
+
 - Configure `.env`:
-  ```env
-  MAIL_MAILER=failover
-  MAIL_FROM_ADDRESS="noreply@yourdomain.com"
-  MAIL_FROM_NAME="${APP_NAME}"
-  MAIL_FAILOVER_MAILERS=brevo,resend,smtp2go
-  MAILER_BREVO_API_KEY=xkeysib-123456789abcdef
-  MAILER_RESEND_API_KEY=re_123456789abcdef
-  MAILER_SMTP2GO_API_KEY=api-123456789abcdef
-  ```
+    ```env
+    MAIL_MAILER=failover
+    MAIL_FROM_ADDRESS="noreply@yourdomain.com"
+    MAIL_FROM_NAME="${APP_NAME}"
+    MAIL_FAILOVER_MAILERS=brevo,resend,smtp2go
+    MAILER_BREVO_API_KEY=xkeysib-123456789abcdef
+    MAILER_RESEND_API_KEY=re_123456789abcdef
+    MAILER_SMTP2GO_API_KEY=api-123456789abcdef
+    ```
 - Zero-config rule: Configuration files do not need to be published unless custom overrides are strictly required.
 
 ### 4. Dispatch emails using standard Laravel 13 APIs
+
 - Generate Mailables with `php artisan make:mail`.
 - Use modern `Envelope`, `Content`, `Attachments`, and `Headers` methods.
 - Dispatch via default failover (`Mail::to()->send()` or `Mail::to()->queue()`), or specify a specific driver via `Mail::mailer('brevo')->to()->send()`.
 
 ### 5. Test and verify in the application
+
 - Local Development: Set `MAIL_MAILER=log` to avoid consuming third-party API quotas.
 - Application Logic Testing: Test with `Mail::fake()`, asserting `Mail::assertSent()`.
 - Failover Verification: Test provider transitions using `Http::fake()`.
@@ -65,12 +70,15 @@ Apply the `eudeka/laravel-mailer` package in the smallest correct way using stan
 ## Rules, References, and Templates
 
 Read before executing:
+
 - Official Laravel 13 Mail Documentation: https://laravel.com/docs/13.x/mail
+- Mail Transport Architecture & Extension Guide: `docs/mail-transport-guide.md` (Standard for adding new email transports, instant failover, idempotency, and test recipes)
+- Provider Specifications & Directory: `docs/providers/README.md`
 - Transports provided:
-  - `failover`: Symfony `FailoverTransport` cycling through `MAIL_FAILOVER_MAILERS`.
-  - `brevo`: Brevo v3 transactional email REST API (`https://api.brevo.com/v3/smtp/email`).
-  - `resend`: Resend v1 emails REST API (`https://api.resend.com/emails`).
-  - `smtp2go`: SMTP2GO `/email/send` REST API (`https://api.smtp2go.com/v3/email/send`).
+    - `failover`: Symfony `FailoverTransport` cycling through `MAIL_FAILOVER_MAILERS`.
+    - `brevo`: Brevo v3 transactional email REST API (`https://api.brevo.com/v3/smtp/email`).
+    - `resend`: Resend v1 emails REST API (`https://api.resend.com/emails`).
+    - `smtp2go`: SMTP2GO `/email/send` REST API (`https://api.smtp2go.com/v3/email/send`).
 - Setup Command: `php artisan eudeka:mailer-install`
 - Safe Config Caching: Environment variables are internally resolved into `config/mailers.php`, safe for `php artisan config:cache`.
 
@@ -162,6 +170,7 @@ public function build(): self
 ```
 
 Embedded images in Blade templates:
+
 ```html
 <img src="{{ $message->embed(public_path('images/logo.png')) }}" alt="Logo" />
 ```

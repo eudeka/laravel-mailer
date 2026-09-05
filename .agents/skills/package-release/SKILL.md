@@ -19,8 +19,8 @@ Prepare a safe package release checklist and implementation without tagging, pus
 3. Ensure the `"version"` field in `composer.json` is bumped to match the target release version (`X.Y.Z`), and included in the release commit.
 4. Update `CHANGELOG.md` with section `## [vX.Y.Z] - YYYY-MM-DD` containing curated highlights and changes.
 5. Format the release commit:
-   - Commit title must strictly follow `release: vX.Y.Z` or `chore(release): vX.Y.Z`.
-   - Commit body must mirror the summary notes from `CHANGELOG.md`.
+    - Commit title must strictly follow `release: vX.Y.Z` or `chore(release): vX.Y.Z`.
+    - Commit body must mirror the summary notes from `CHANGELOG.md`.
 6. Review tag naming, release branch (`main`), and GitHub release workflow behavior before pushing.
 7. Do not tag, push, or publish without explicit user approval.
 

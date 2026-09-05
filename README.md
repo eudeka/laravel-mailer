@@ -216,6 +216,7 @@ If your consumer application uses AI coding agents (such as Antigravity, Cursor,
 
 ```markdown
 ### Email & Mailers (eudeka/laravel-mailer)
+
 - Multi-vendor email delivery with automatic failover is handled by `eudeka/laravel-mailer` (Brevo, Resend, SMTP2GO).
 - Use standard Laravel 13 `Mail` facade and Mailables (`Mail::to()->send()` or `->queue()`).
 - DO NOT install vendor SDKs (`resend/resend-php`, `getbrevo/brevo-php`) or invoke custom facades.
@@ -295,6 +296,17 @@ composer analyse      # Run PHPStan static analysis
 composer lint:check   # Check code style with Laravel Pint
 composer lint         # Automatically format code with Laravel Pint
 ```
+
+### Architecture & Adding New Transports
+
+For developers or AI coding agents adding new email transports or extending the package, refer to the authoritative [Mail Transport Architecture & Extension Guide](docs/mail-transport-guide.md). It details the 8 core architectural invariants (zero-SDK REST, instant failover, idempotency, strict 2xx validation), the 10-step implementation workflow, and a ready-to-use boilerplate.
+
+Detailed provider specifications, payload mappings, and API references:
+
+- [Brevo Transport Specification](docs/providers/brevo.md)
+- [Resend Transport Specification](docs/providers/resend.md)
+- [SMTP2GO Transport Specification](docs/providers/smtp2go.md)
+- [Provider Documentation Directory & Blueprint](docs/providers/README.md)
 
 ### Codebase Layout
 
