@@ -12,7 +12,6 @@ use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\Address;
-use Symfony\Component\Mime\Email;
 use Throwable;
 
 final class ResendApiTransport extends AbstractTransport
@@ -76,7 +75,7 @@ final class ResendApiTransport extends AbstractTransport
             $payload['html'] = $html;
         }
 
-        $text = $email->getTextBody();
+        $text = $this->resolvePlainTextBody($email->getTextBody(), $html);
 
         if (is_string($text) && $text !== '') {
             $payload['text'] = $text;
@@ -195,11 +194,11 @@ final class ResendApiTransport extends AbstractTransport
                 ? sprintf('[%s] %s', $errorType, is_string($errorMsg) ? $errorMsg : (string) json_encode($errorMsg))
                 : (is_string($errorMsg) ? $errorMsg : (string) json_encode($errorMsg));
 
-            $retryAfter = $response->header('Retry-After');
-
-            if ($response->status() === 429 && trim($retryAfter) !== '') {
-                $formattedError .= sprintf(' (retry after %ss)', trim($retryAfter));
-            }
+            $formattedError = $this->formatRetryAfterError(
+                $formattedError,
+                $response->header('Retry-After'),
+                $response->status(),
+            );
 
             throw new TransportException(sprintf(
                 'Failed sending email via Resend (HTTP %d): %s',
@@ -249,87 +248,6 @@ final class ResendApiTransport extends AbstractTransport
 
         $message->setMessageId(trim($messageId));
         $message->appendDebug('Sent via Resend API');
-    }
-
-    /**
-     * Resolve the idempotency key from email headers or auto-generate one.
-     *
-     * @param  array<string, string>  $headers
-     * @param  array<string>  $to
-     */
-    private function resolveIdempotencyKey(array $headers, Email $email, string $from, array $to): string
-    {
-        $explicit = $this->extractHeaderValue($headers, ['idempotency-key', 'x-idempotency-key']);
-
-        if ($explicit !== null && trim($explicit) !== '') {
-            return $this->sanitizeIdempotencyKey($explicit);
-        }
-
-        $messageIdHeader = $email->getHeaders()->getHeaderBody('Message-ID');
-
-        if (is_string($messageIdHeader) && trim($messageIdHeader) !== '') {
-            return $this->sanitizeIdempotencyKey(trim($messageIdHeader, '<> '));
-        }
-
-        $fingerprint = sprintf(
-            '%s|%s|%s|%s',
-            $from,
-            implode(',', $to),
-            (string) $email->getSubject(),
-            (string) $email->getDate()?->getTimestamp(),
-        );
-
-        return $this->sanitizeIdempotencyKey(hash('sha256', $fingerprint));
-    }
-
-    /**
-     * Sanitize idempotency key to ASCII characters up to 256 chars max.
-     */
-    private function sanitizeIdempotencyKey(string $key): string
-    {
-        $sanitized = (string) preg_replace('/[^\x20-\x7E]/', '', trim($key));
-
-        return mb_substr($sanitized !== '' ? $sanitized : hash('sha256', (string) microtime(true)), 0, 256);
-    }
-
-    /**
-     * Extract header value case-insensitively.
-     *
-     * @param  array<string, string>  $headers
-     * @param  array<string>  $names
-     */
-    private function extractHeaderValue(array $headers, array $names): ?string
-    {
-        $lowerNames = array_map('strtolower', $names);
-
-        foreach ($headers as $key => $value) {
-            if (in_array(strtolower($key), $lowerNames, true)) {
-                return $value;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Remove header entries case-insensitively.
-     *
-     * @param  array<string, string>  $headers
-     * @param  array<string>  $names
-     * @return array<string, string>
-     */
-    private function removeHeaderCaseInsensitive(array $headers, array $names): array
-    {
-        $lowerNames = array_map('strtolower', $names);
-        $result = [];
-
-        foreach ($headers as $key => $value) {
-            if (! in_array(strtolower($key), $lowerNames, true)) {
-                $result[$key] = $value;
-            }
-        }
-
-        return $result;
     }
 
     /**

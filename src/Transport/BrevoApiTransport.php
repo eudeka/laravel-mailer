@@ -91,7 +91,7 @@ final class BrevoApiTransport extends AbstractTransport
             $payload['htmlContent'] = $html;
         }
 
-        $text = $email->getTextBody();
+        $text = $this->resolvePlainTextBody($email->getTextBody(), $html);
 
         if (is_string($text) && $text !== '') {
             $payload['textContent'] = $text;
@@ -141,19 +141,10 @@ final class BrevoApiTransport extends AbstractTransport
             }
         }
 
-        $idempotencyKey = null;
-        foreach ($headers as $hKey => $hVal) {
-            if (strcasecmp($hKey, 'idempotency-key') === 0 || strcasecmp($hKey, 'x-idempotency-key') === 0) {
-                $idempotencyKey = (string) $hVal;
-
-                break;
-            }
-        }
-
-        if ($idempotencyKey === null || trim($idempotencyKey) === '') {
-            $idempotencyKey = hash('sha256', $message->getMessage()->toString());
-        }
-
+        $senderEmail = $sender['email'];
+        $toEmails = array_map(fn (array $addr): string => $addr['email'], $to);
+        $idempotencyKey = $this->resolveIdempotencyKey($headers, $email, $senderEmail, $toEmails);
+        $headers = $this->removeHeaderCaseInsensitive($headers, ['idempotency-key', 'x-idempotency-key']);
         $headers['Idempotency-Key'] = $idempotencyKey;
 
         $payload['headers'] = $headers;
@@ -167,6 +158,7 @@ final class BrevoApiTransport extends AbstractTransport
                 'api-key' => $this->apiKey,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
+                'User-Agent' => 'eudeka-laravel-mailer/1.0',
             ])
                 ->timeout($this->timeout)
                 ->post($this->endpoint, $payload);
@@ -182,6 +174,12 @@ final class BrevoApiTransport extends AbstractTransport
             $errorMsg = is_string($code) && $code !== ''
                 ? sprintf('code: %s, message: %s', $code, $msgText)
                 : $msgText;
+
+            $errorMsg = $this->formatRetryAfterError(
+                $errorMsg,
+                $response->header('Retry-After'),
+                $response->status(),
+            );
 
             throw new TransportException(sprintf(
                 'Failed sending email via Brevo (HTTP %d): %s',

@@ -449,3 +449,55 @@ it('returns transport string representation', function () {
         ->and($transport->endpoint())->toBe('https://api.smtp2go.com/v3/email/send')
         ->and($transport->timeout())->toBe(10);
 });
+
+it('includes retry-after details when SMTP2GO returns HTTP 429 rate limit', function () {
+    Http::fake([
+        'https://api.smtp2go.com/v3/email/send' => Http::response(
+            ['message' => 'Rate limit exceeded'],
+            429,
+            ['Retry-After' => '4'],
+        ),
+    ]);
+
+    $transport = new Smtp2GoApiTransport(apiKey: 'key_123');
+
+    $email = (new Email)
+        ->from('sender@example.com')
+        ->to('recipient@example.com')
+        ->subject('Rate Limit Test')
+        ->text('Testing 429 Retry-After');
+
+    $transport->send($email);
+})->throws(TransportException::class, 'Failed sending email via SMTP2GO (HTTP 429): Rate limit exceeded (retry after 4s)');
+
+it('sends User-Agent and Idempotency-Key headers in request', function () {
+    Http::fake([
+        'https://api.smtp2go.com/v3/email/send' => Http::response([
+            'data' => [
+                'succeeded' => 1,
+                'failed' => 0,
+                'failures' => [],
+                'email_id' => 'smtp2go_idemp_123',
+            ],
+        ], 200),
+    ]);
+
+    $transport = new Smtp2GoApiTransport(apiKey: 'key_123');
+
+    $email = (new Email)
+        ->from('sender@example.com')
+        ->to('recipient@example.com')
+        ->subject('Header Test')
+        ->text('Testing User-Agent and Idempotency-Key');
+
+    $email->getHeaders()->addTextHeader('Idempotency-Key', 'custom-smtp2go-key');
+
+    $sentMessage = $transport->send($email);
+
+    expect($sentMessage?->getMessageId())->toBe('smtp2go_idemp_123');
+
+    Http::assertSent(function (Request $request) {
+        return $request->hasHeader('User-Agent', 'eudeka-laravel-mailer/1.0')
+            && $request->hasHeader('Idempotency-Key', 'custom-smtp2go-key');
+    });
+});

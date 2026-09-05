@@ -78,7 +78,7 @@ final class Smtp2GoApiTransport extends AbstractTransport
         ];
 
         $html = $email->getHtmlBody();
-        $text = $email->getTextBody();
+        $text = $this->resolvePlainTextBody($email->getTextBody(), $html);
 
         if (is_string($html) && $html !== '') {
             $payload['html_body'] = $html;
@@ -86,12 +86,6 @@ final class Smtp2GoApiTransport extends AbstractTransport
 
         if (is_string($text) && $text !== '') {
             $payload['text_body'] = $text;
-        } elseif (is_string($html) && $html !== '') {
-            $plainTextFallback = trim(strip_tags($html));
-
-            if ($plainTextFallback !== '') {
-                $payload['text_body'] = $plainTextFallback;
-            }
         }
 
         $cc = array_map(fn (Address $addr): string => $this->formatAddress($addr), $email->getCc());
@@ -152,12 +146,17 @@ final class Smtp2GoApiTransport extends AbstractTransport
             $payload['custom_headers'] = $customHeaders;
         }
 
+        $extracted = $this->extractHeadersTagsAndMetadata($email);
+        $idempotencyKey = $this->resolveIdempotencyKey($extracted['headers'], $email, $sender, $to);
+
         try {
             $response = Http::withHeaders([
                 'X-Smtp2go-Api-Key' => $this->apiKey,
                 'api-key' => $this->apiKey,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
+                'User-Agent' => 'eudeka-laravel-mailer/1.0',
+                'Idempotency-Key' => $idempotencyKey,
             ])
                 ->timeout($this->timeout)
                 ->post($this->endpoint, $payload);
@@ -171,11 +170,17 @@ final class Smtp2GoApiTransport extends AbstractTransport
                 ?? $response->json('message')
                 ?? $response->body();
 
-            $formattedError = is_string($errorMsg) ? $errorMsg : json_encode($errorMsg);
+            $formattedError = is_string($errorMsg) ? $errorMsg : (json_encode($errorMsg) ?: 'Unknown error');
 
             if (is_string($errorCode) && $errorCode !== '') {
                 $formattedError = sprintf('[%s] %s', $errorCode, $formattedError);
             }
+
+            $formattedError = $this->formatRetryAfterError(
+                $formattedError,
+                $response->header('Retry-After'),
+                $response->status(),
+            );
 
             throw new TransportException(sprintf(
                 'Failed sending email via SMTP2GO (HTTP %d): %s',

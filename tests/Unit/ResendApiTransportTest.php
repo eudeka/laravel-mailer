@@ -303,3 +303,26 @@ it('returns transport string representation', function () {
         ->and($transport->endpoint())->toBe('https://api.resend.com/emails')
         ->and($transport->timeout())->toBe(10);
 });
+
+it('automatically falls back to stripped html for text body when text is missing', function () {
+    Http::fake([
+        'https://api.resend.com/emails' => Http::response(['id' => 're_fallback_123'], 200),
+    ]);
+
+    $transport = new ResendApiTransport(apiKey: 're_key');
+
+    $email = (new Email)
+        ->from('sender@example.com')
+        ->to('recipient@example.com')
+        ->subject('Fallback Text Test')
+        ->html('<h2>Important Update</h2><p>Here are the details.</p>');
+
+    $transport->send($email);
+
+    Http::assertSent(function (Request $request) {
+        $data = $request->data();
+
+        return isset($data['text'])
+            && (str_contains($data['text'], 'Important Update'));
+    });
+});

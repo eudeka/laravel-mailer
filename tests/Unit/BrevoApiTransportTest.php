@@ -410,3 +410,66 @@ it('extracts messageId from messageIds array when messageId is missing', functio
 
     expect($sentMessage?->getMessageId())->toBe('brevo_batch_msg_456');
 });
+
+it('automatically falls back to stripped html for textContent when text body is missing', function () {
+    Http::fake([
+        'https://api.brevo.com/v3/smtp/email' => Http::response(['messageId' => 'brevo_fallback_123'], 201),
+    ]);
+
+    $transport = new BrevoApiTransport(apiKey: 'test_key');
+
+    $email = (new Email)
+        ->from('sender@example.com')
+        ->to('recipient@example.com')
+        ->subject('Fallback Text Test')
+        ->html('<h1>Hello World</h1><p>This is HTML content.</p>');
+
+    $transport->send($email);
+
+    Http::assertSent(function (Request $request) {
+        $data = $request->data();
+
+        return $data['textContent'] === 'Hello WorldThis is HTML content.'
+            || str_contains($data['textContent'], 'Hello World');
+    });
+});
+
+it('includes retry-after details when Brevo returns HTTP 429 rate limit', function () {
+    Http::fake([
+        'https://api.brevo.com/v3/smtp/email' => Http::response(
+            ['message' => 'Too many requests.'],
+            429,
+            ['Retry-After' => '5'],
+        ),
+    ]);
+
+    $transport = new BrevoApiTransport(apiKey: 'test_key');
+
+    $email = (new Email)
+        ->from('sender@example.com')
+        ->to('recipient@example.com')
+        ->subject('Rate Limit Test')
+        ->text('Testing 429 Retry-After');
+
+    $transport->send($email);
+})->throws(TransportException::class, 'Failed sending email via Brevo (HTTP 429): Too many requests. (retry after 5s)');
+
+it('sends User-Agent header with expected package identifier', function () {
+    Http::fake([
+        'https://api.brevo.com/v3/smtp/email' => Http::response(['messageId' => 'brevo_ua_123'], 201),
+    ]);
+
+    $transport = new BrevoApiTransport(apiKey: 'test_key');
+
+    $email = (new Email)
+        ->from('sender@example.com')
+        ->to('recipient@example.com')
+        ->subject('UA Test')
+        ->text('Testing User-Agent');
+
+    $transport->send($email);
+
+    Http::assertSent(function (Request $request) {
+        return $request->hasHeader('User-Agent', 'eudeka-laravel-mailer/1.0');
+    });
+});

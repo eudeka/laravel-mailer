@@ -186,4 +186,121 @@ trait ExtractsEmailData
             'metadata' => $metadata,
         ];
     }
+
+    /**
+     * Resolve plain text body, falling back to stripping tags from HTML if plain text is empty.
+     */
+    protected function resolvePlainTextBody(mixed $text, mixed $html): ?string
+    {
+        $textString = is_resource($text) ? stream_get_contents($text) : $text;
+
+        if (is_string($textString) && trim($textString) !== '') {
+            return $textString;
+        }
+
+        $htmlString = is_resource($html) ? stream_get_contents($html) : $html;
+
+        if (is_string($htmlString) && trim($htmlString) !== '') {
+            $plain = trim(strip_tags($htmlString));
+
+            if ($plain !== '') {
+                return $plain;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the idempotency key from email headers or auto-generate one.
+     *
+     * @param  array<string, string>  $headers
+     * @param  array<string>  $to
+     */
+    protected function resolveIdempotencyKey(array $headers, Email $email, string $from, array $to): string
+    {
+        $explicit = $this->extractHeaderValue($headers, ['idempotency-key', 'x-idempotency-key']);
+
+        if ($explicit !== null && trim($explicit) !== '') {
+            return $this->sanitizeIdempotencyKey($explicit);
+        }
+
+        $messageIdHeader = $email->getHeaders()->getHeaderBody('Message-ID');
+
+        if (is_string($messageIdHeader) && trim($messageIdHeader) !== '') {
+            return $this->sanitizeIdempotencyKey(trim($messageIdHeader, '<> '));
+        }
+
+        $fingerprint = sprintf(
+            '%s|%s|%s|%s',
+            $from,
+            implode(',', $to),
+            (string) $email->getSubject(),
+            (string) $email->getDate()?->getTimestamp(),
+        );
+
+        return $this->sanitizeIdempotencyKey(hash('sha256', $fingerprint));
+    }
+
+    /**
+     * Sanitize idempotency key to ASCII characters up to 256 chars max.
+     */
+    protected function sanitizeIdempotencyKey(string $key): string
+    {
+        $sanitized = (string) preg_replace('/[^\x20-\x7E]/', '', trim($key));
+
+        return mb_substr($sanitized !== '' ? $sanitized : hash('sha256', (string) microtime(true)), 0, 256);
+    }
+
+    /**
+     * Extract header value case-insensitively.
+     *
+     * @param  array<string, string>  $headers
+     * @param  array<string>  $names
+     */
+    protected function extractHeaderValue(array $headers, array $names): ?string
+    {
+        $lowerNames = array_map('strtolower', $names);
+
+        foreach ($headers as $key => $value) {
+            if (in_array(strtolower($key), $lowerNames, true)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Remove header entries case-insensitively.
+     *
+     * @param  array<string, string>  $headers
+     * @param  array<string>  $names
+     * @return array<string, string>
+     */
+    protected function removeHeaderCaseInsensitive(array $headers, array $names): array
+    {
+        $lowerNames = array_map('strtolower', $names);
+        $result = [];
+
+        foreach ($headers as $key => $value) {
+            if (! in_array(strtolower($key), $lowerNames, true)) {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Format error message with Retry-After details on HTTP 429 rate limit.
+     */
+    protected function formatRetryAfterError(string $errorMessage, ?string $retryAfter, int $status): string
+    {
+        if ($status === 429 && is_string($retryAfter) && trim($retryAfter) !== '') {
+            return $errorMessage.sprintf(' (retry after %ss)', trim($retryAfter));
+        }
+
+        return $errorMessage;
+    }
 }
