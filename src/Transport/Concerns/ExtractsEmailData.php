@@ -28,17 +28,11 @@ trait ExtractsEmailData
     }
 
     /**
-     * Format a Symfony Address into "Name <email>" or "email".
+     * Format a Symfony Address into RFC-5322 compliant "Name <email>" or "email".
      */
     protected function formatAddress(SymfonyAddress $address): string
     {
-        $name = trim($address->getName());
-
-        if ($name !== '') {
-            return sprintf('%s <%s>', $name, $address->getAddress());
-        }
-
-        return $address->getAddress();
+        return $address->toString();
     }
 
     /**

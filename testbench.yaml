@@ -1,7 +1,7 @@
 laravel: "@testbench"
 
 providers:
-  # - Workbench\App\Providers\WorkbenchServiceProvider
+  - Eudeka\LaravelMailer\LaravelMailerServiceProvider
 
 migrations:
   - workbench/database/migrations
@@ -14,6 +14,7 @@ workbench:
   install: true
   health: false
   discovers:
+    config: true
     web: true
     api: true
     commands: true
